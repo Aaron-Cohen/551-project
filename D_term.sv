@@ -7,8 +7,8 @@ input err_vld;			// true when error is meaningful and not bogus
 output [14:0] D_term;
 
 localparam signed [6:0] D_COEFF = 7'h38;
-logic [10:0] err_sat_1x_old, err_sat_2x_old, D_diff;
-logic [7:0] D_diff_sat;
+logic signed [10:0] err_sat_1x_old, err_sat_2x_old, D_diff;
+logic signed [7:0] D_diff_sat;
 
 // Flop to store error from 1 cycle ago
 always_ff @(posedge clk, negedge rst_n)
