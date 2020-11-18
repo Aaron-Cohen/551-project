@@ -127,7 +127,7 @@ always@(posedge clk, negedge rst_n) begin
 	else if(strt_cnv)
 		high_val <= 0;
 	else if(cnv_cmplt)
-		assign high_val = (res > high_val)? res: high_val;
+		high_val <= (res > high_val)? res: high_val;
 
 end
 
@@ -180,7 +180,7 @@ always @(posedge clk or negedge rst_n)
 
 
 //state machine
-always_ff@(posedge clk, negedge rst_n) begin
+always_comb begin
 	IR_R0_en = 0;
 	IR_R1_en = 0;
 	IR_R2_en = 0;
