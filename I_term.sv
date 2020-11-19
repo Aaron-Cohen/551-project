@@ -1,20 +1,19 @@
 // Mya Schmitz, Aaron Cohen - 11/18/2020
 module I_term(clk, rst_n, err_sat, err_vld, go, moving, line_present, I_term);
 
-input logic clk, rst_n; 				// clock and reset
-input logic line_present;				// Integrator is cleared on rise of line_present
+input logic clk, rst_n; 			// clock and reset
+input logic line_present;			// Integrator is cleared on rise of line_present
 input logic [10:0] err_sat;			// saturated value of error (signed)
-input logic err_vld;					// high when err_sat is valid
+input logic err_vld;				// high when err_sat is valid
 input logic go, moving;				// Integrator is cleared if either is not true
-
 output logic [9:0] I_term;			// I term for PID
 
-logic ov;							// high if there is overflow, low if not
-logic [15:0] adder_result;	// contains value to add?
-logic [15:0] valid_sum;	// output from first multiplexer and adder
-logic [15:0] err_sat_extended;			// sign extended err_sat value
-logic [15:0] accum_val;				// accumulated value so far
-logic line_rise, line_status;
+logic ov;							// Indicates whether overflow has occured
+logic [15:0] adder_result;			// Full adder sum
+logic [15:0] valid_sum;				// Sum post validation (retains value if invalid sum)
+logic [15:0] err_sat_extended;		// Sign extended err_sat value
+logic [15:0] accum_val;				// Accumulated value so far
+logic line_rise, line_status;		// Status of mazerunner on line
 
 // Flopping line_present into sychronous line_status will indicate whether or not there was a line present previously
 always_ff @(posedge clk)

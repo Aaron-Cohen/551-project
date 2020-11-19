@@ -1,13 +1,13 @@
 // Aaron Cohen - 11/13/2020
-module PID(clk, rst_n, go, err_vld, error, lft_spd, right_spd);
+module PID(clk, rst_n, go, err_vld, line_present, error, lft_spd, right_spd);
 
-input clk, rst_n;		// clock and asynch reset
-input go;				// start signal
-input err_vld;			// true when error is meaningful and not bogus
-input line_present;		// mazerunner on line or not
-input [15:0] error;		// error reading from IR sensors
-output lft_spd;			// speed for left side
-output right_spd;		// speed for right side
+input clk, rst_n;			// clock and asynch reset
+input go;					// start signal
+input err_vld;				// true when error is meaningful and not bogus
+input line_present;			// mazerunner on line or not
+input  [15:0] error;		// error reading from IR sensors
+output [11:0] lft_spd;		// speed for left side
+output [11:0] right_spd;	// speed for right side
 
 // 11 bit sautrated error reading - used in all three PID calculations
 logic signed [10:0] err_sat;
@@ -35,13 +35,18 @@ assign P_term =
 ////////////////////////////////////////////////
 //  Signals, calculations, flops for I_term  //
 //////////////////////////////////////////////
+logic moving;						// Indicates whether mazerunner should move
 logic ov;							// Indicates whether overflow has occured
-logic [9:0] I_term					// I term calculated value
+logic [9:0] I_term;					// I term calculated value
 logic [15:0] adder_result;			// Full adder sum
 logic [15:0] valid_sum;				// Sum post validation (retains value if invalid sum)
 logic [15:0] err_sat_extended;		// Sign extended err_sat value
 logic [15:0] accum_val;				// Accumulated value so far
 logic line_rise, line_status;		// Status of mazerunner on line
+
+// Flopping line_present into sychronous line_status will indicate whether or not there was a line present previously
+always_ff @(posedge clk)
+	line_status <= line_present;
 
 // If there is a line present on the syncronous signal, then it has already risen.
 // However, if syncronously there is not a line, but we see one asynchronously, this is a rising edge.
@@ -109,13 +114,13 @@ assign D_term = D_COEFF * D_diff_sat;
 parameter FAST_SIM = 0;
 
 logic [14:0] I_term_extended;
-assign I_term_extended = {6{I_term[9]}, I_term[8:0]};
+assign I_term_extended = {{6{I_term[9]}}, I_term[8:0]};
 
-logic [15:0] PID;
+logic [15:0] PID, PID_reading;
 assign PID = P_term + I_term + D_term;
 
 // Mux after sigma in diagram
-assign PID_reading = go ? PID_sum : 15'h0000;
+assign PID_reading = go ? PID : 15'h0000;
 
 // Mux on bottom left (not actually synthesized - generated at runtime)
 logic [5:0] increment;
@@ -133,21 +138,20 @@ always_ff@(posedge clk, negedge rst_n)
 		FRWRD <= 0;
 	else if (!go) // sync reset
 		FRWRD <= 0;
-	else if (&frwrd[9:8] && err_vld) // enable
+	else if (~&FRWRD[9:8] && err_vld) // enable
 		FRWRD <= FRWRD + increment;
 
 // Only move if FRWRD above threshold		
-logic moving;
 assign moving = FRWRD > 11'h080;
 
 // Speed is function of PID_reading and FRWRD value
-logic [11:0] lft_adder, rght_adder, FRWRD_padded;
+logic [11:0] left_adder, right_adder, FRWRD_padded;
 assign FRWRD_padded = {1'b0, FRWRD};
-assign lft_adder    = PID_reading[14:3] + FRWRD_padded;
-assign rght_adder   = FRWRD_padded - PID_reading[14:3];
+assign left_adder   = PID_reading[14:3] + FRWRD_padded;
+assign right_adder  = FRWRD_padded - PID_reading[14:3];
 
 // Muxes for speed outputs based on moving signal
-assign lft_spd  = moving ? lft_adder  : FRWRD_padded;
-assign rght_spd = moving ? rght_adder : FRWRD_padded;
+assign lft_spd   = moving ? left_adder  : FRWRD_padded;
+assign right_spd = moving ? right_adder : FRWRD_padded;
 
 endmodule
