@@ -116,8 +116,8 @@ parameter FAST_SIM = 0;
 logic [14:0] I_term_extended;
 assign I_term_extended = {{6{I_term[9]}}, I_term[8:0]};
 
-logic [15:0] PID, PID_reading;
-assign PID = P_term + I_term + D_term;
+logic [14:0] PID, PID_reading;
+assign PID = P_term + I_term_extended + D_term;
 
 // Mux after sigma in diagram
 assign PID_reading = go ? PID : 15'h0000;
