@@ -54,16 +54,16 @@ A2D_intf a2d(.clk(clk), .rst_n(rst_n), .strt_cnv(strt_cnv), .cnv_cmplt(cnv_cmplt
 //timer
 always@(posedge clk, negedge rst_n) begin
 	if(!rst_n)
-		tmr <= 0;
+		tmr <= 0;					//go to 0 on low rst_n
 	else 
-		tmr <= tmr + 1;
+		tmr <= tmr + 1;				//increment on clock
 
 
 end
 
 
 //IR_R0
-always@(posedge clk) begin
+always@(posedge clk) begin			//for each of the IR registers only get res when their respective enable is one
 	if(IR_R0_en)
 		IR_R0 <= res;
 
@@ -123,18 +123,19 @@ end
 //get highest val
 always@(posedge clk, negedge rst_n) begin
 	if(!rst_n)
-		high_val <= 0;
+		high_val <= 0;		//asynch reset
 	else if(IR_vld)
-		high_val <= 0;
+		high_val <= 0;		//when IR_vld, high_val goes to 0
 	else if(cnv_cmplt)
-		high_val <= (res > high_val)? res: high_val;
+		high_val <= (res > high_val)? res: high_val;	//else when cnv_cmplt we only put res into 
+														//high_val if its larger than the current high_val
 
 end
 
 //line_present
 always@(posedge clk, negedge rst_n) begin
 	if(!rst_n)
-		line_present <= 0;
+		line_present <= 0;		//asynch reset
 	else if(IR_vld)
 		line_present <= high_val>LINE_THRES;
 end
@@ -142,40 +143,40 @@ end
 //IR_vld
 always@(posedge clk, negedge rst_n) begin
 	if(!rst_n)
-		IR_vld <=0;
+		IR_vld <=0;		//asynch reset
 	else if(set_IR_vld)
-		IR_vld <= 1;
+		IR_vld <= 1;		//when set_IR_vld, IR_vld goes to 1
 	else if(clr_IR_vld)
-		IR_vld <=0;
+		IR_vld <=0;			//when clr_IR_vld, IR_vld goes to 0
 end
 
 //IR_en
 always@(posedge clk, negedge rst_n) begin
 	if(!rst_n)
-		IR_en <=0;
+		IR_en <=0;		//asynch reset
 	else if(set_IR_en)
-		IR_en <= 1;
+		IR_en <= 1;		//when set_IR_en, IR_en goes to 1
 	else if(clr_IR_en)
-		IR_en <=0;
+		IR_en <=0;		//when clr_IR_en, IR_en goes to 0
 end
 
 
 //chnnl inc
 always@(posedge clk, negedge rst_n) begin
 	if(!rst_n)
-		chnnl <=0;
+		chnnl <=0;		//asynch reset
 	else if(chnnl_inc)		
-		chnnl <= chnnl + 1;
+		chnnl <= chnnl + 1;		//when chnnl_inc, chnnl goes up by one
 	else if(chnnl_clr)
-		chnnl <= 0;
+		chnnl <= 0;			//when chnnl_clr, chnnl goes to 0
 end
 
 //state flops
 always @(posedge clk or negedge rst_n)
 	if (!rst_n)
-		state <= IDLE;
+		state <= IDLE;		//asynch reset to IDLE state
 	else
-		state <= nextState;
+		state <= nextState; //otherwise get nextState
 
 
 
@@ -219,7 +220,7 @@ always_comb begin
 		strt_cnv = 1;
 		end
 		
-	default : if(cnv_cmplt && (chnnl ==0)) begin //enable the IR reciever for the correct channel
+	default : if(cnv_cmplt && (chnnl ==0)) begin //enable the IR reciever for the correct channel, increment the channel and go back to IDLE
 		IR_R0_en = 1;
 		chnnl_inc = 1;
 		nextState = IDLE;
