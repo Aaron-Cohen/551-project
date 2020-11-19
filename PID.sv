@@ -4,6 +4,7 @@ module PID(clk, rst_n, go, err_vld, error, lft_spd, right_spd);
 input clk, rst_n;		// clock and asynch reset
 input go;				// start signal
 input err_vld;			// true when error is meaningful and not bogus
+input line_present;		// mazerunner on line or not
 input [15:0] error;		// error reading from IR sensors
 output lft_spd;			// speed for left side
 output right_spd;		// speed for right side
@@ -34,8 +35,8 @@ assign P_term =
 ////////////////////////////////////////////////
 //  Signals, calculations, flops for I_term  //
 //////////////////////////////////////////////
-logic [9:0] I_term
 logic ov;							// Indicates whether overflow has occured
+logic [9:0] I_term					// I term calculated value
 logic [15:0] adder_result;			// Full adder sum
 logic [15:0] valid_sum;				// Sum post validation (retains value if invalid sum)
 logic [15:0] err_sat_extended;		// Sign extended err_sat value
@@ -56,19 +57,19 @@ assign adder_result = accum_val + err_sat_extended;
 assign valid_sum = (!ov && err_vld) ? adder_result : accum_val;
 
 // Register for storing accumulated results
-always_ff @(posedge clk, negedge rst_n) begin
+always_ff @(posedge clk, negedge rst_n)
 	if (!rst_n)
 		accum_val <= 16'h0000;
 	else if (!go || !moving || line_rise) // Any of these signals act as sync resets
 		accum_val <= 16'h0000;
 	else
 		accum_val <= valid_sum;
-end
 
 // Overflow occurs when the accumulator and the saturated error have the same sign AND their sum has the opposing sign
 assign ov = ((accum_val[15] == err_sat_extended[15]) && (accum_val[15] != adder_result[15]));
 
-assign I_term = accum_val[15:6]; // Grab upper bits for I term of PID
+ // Grab upper bits for I term of PID
+assign I_term = accum_val[15:6];
 
 ////////////////////////////////////////////////
 //  Signals, calculations, flops for D_term  //
@@ -77,6 +78,7 @@ assign I_term = accum_val[15:6]; // Grab upper bits for I term of PID
 localparam signed [6:0] D_COEFF = 7'h38;
 logic signed [10:0] err_sat_1x_old, err_sat_2x_old, D_diff;
 logic signed [7:0] D_diff_sat;
+logic [14:0] D_term;
 
 // Flop to store error from 1 cycle ago
 always_ff @(posedge clk, negedge rst_n)
@@ -100,5 +102,52 @@ assign D_diff_sat =
 			{D_diff[10], D_diff[6:0]}; // else, do not saturate: tack sign bit to lower 7 bits.	
 
 assign D_term = D_COEFF * D_diff_sat;
+
+//////////////////////////////////////////////////
+//  Circuitry to put P, I and D terms together //
+////////////////////////////////////////////////
+parameter FAST_SIM = 0;
+
+logic [14:0] I_term_extended;
+assign I_term_extended = {6{I_term[9]}, I_term[8:0]};
+
+logic [15:0] PID;
+assign PID = P_term + I_term + D_term;
+
+// Mux after sigma in diagram
+assign PID_reading = go ? PID_sum : 15'h0000;
+
+// Mux on bottom left (not actually synthesized - generated at runtime)
+logic [5:0] increment;
+generate
+	if(FAST_SIM == 1)
+		assign increment = 6'h20;
+	else 
+		assign increment = 6'h04;
+endgenerate
+
+// FRWRD register
+logic [10:0] FRWRD;
+always_ff@(posedge clk, negedge rst_n)
+	if (!rst_n) // async reset
+		FRWRD <= 0;
+	else if (!go) // sync reset
+		FRWRD <= 0;
+	else if (&frwrd[9:8] && err_vld) // enable
+		FRWRD <= FRWRD + increment;
+
+// Only move if FRWRD above threshold		
+logic moving;
+assign moving = FRWRD > 11'h080;
+
+// Speed is function of PID_reading and FRWRD value
+logic [11:0] lft_adder, rght_adder, FRWRD_padded;
+assign FRWRD_padded = {1'b0, FRWRD};
+assign lft_adder    = PID_reading[14:3] + FRWRD_padded;
+assign rght_adder   = FRWRD_padded - PID_reading[14:3];
+
+// Muxes for speed outputs based on moving signal
+assign lft_spd  = moving ? lft_adder  : FRWRD_padded;
+assign rght_spd = moving ? rght_adder : FRWRD_padded;
 
 endmodule
