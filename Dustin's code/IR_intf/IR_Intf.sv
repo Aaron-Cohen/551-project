@@ -26,8 +26,8 @@ reg nxt_round, settled;
 typedef enum reg [1:0] {IDLE, SETTLE, TRANS} state_t;
 state_t state, nextState;  //create states
 
-localparam LINE_THRES = 12'h040;
-
+//localparam LINE_THRES = 12'h040; //full synth
+localparam LINE_THRES = 12'h540; //test
 
 
 
