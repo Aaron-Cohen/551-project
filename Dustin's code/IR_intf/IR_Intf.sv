@@ -124,7 +124,7 @@ end
 always@(posedge clk, negedge rst_n) begin
 	if(!rst_n)
 		high_val <= 0;
-	else if(strt_cnv)
+	else if(IR_vld)
 		high_val <= 0;
 	else if(cnv_cmplt)
 		high_val <= (res > high_val)? res: high_val;
@@ -164,7 +164,7 @@ end
 always@(posedge clk, negedge rst_n) begin
 	if(!rst_n)
 		chnnl <=0;
-	else if(chnnl_inc)
+	else if(chnnl_inc)		
 		chnnl <= chnnl + 1;
 	else if(chnnl_clr)
 		chnnl <= 0;
@@ -181,7 +181,7 @@ always @(posedge clk or negedge rst_n)
 
 //state machine
 always_comb begin
-	IR_R0_en = 0;
+	IR_R0_en = 0;	//start everything off to 0
 	IR_R1_en = 0;
 	IR_R2_en = 0;
 	IR_R3_en = 0;
@@ -200,26 +200,26 @@ always_comb begin
 	chnnl_clr = 0;
 	strt_cnv = 0;
 	
-	nextState = state;
+	nextState = state; //initialize nextState to state
 	
 	case (state)
 	
-	IDLE : begin
-		clr_IR_vld = 1;
+	IDLE : begin					
+		clr_IR_vld = 1;	//clear IR_vld and IR_en
 		clr_IR_en = 1;
-		if(nxt_round)begin
-			nextState = SETTLE;
+		if(nxt_round)begin		//on next round go to SETTLE
+			nextState = SETTLE;	//set IR_en to 1
 			set_IR_en = 1;
 		end
 		end
 	
 	
-	SETTLE : if(settled) begin
+	SETTLE : if(settled) begin	//when settled go to TRANS and enable start conversion
 		nextState = TRANS;
 		strt_cnv = 1;
 		end
 		
-	default : if(cnv_cmplt && (chnnl ==0)) begin
+	default : if(cnv_cmplt && (chnnl ==0)) begin //enable the IR reciever for the correct channel
 		IR_R0_en = 1;
 		chnnl_inc = 1;
 		nextState = IDLE;

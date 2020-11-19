@@ -36,7 +36,7 @@ initial begin
 	end
 	
 	
-	//test 2 with timeout
+	//test 2 with timeout 
 	fork
 		begin : timeout2
 			repeat(30000) @(negedge clk);
@@ -53,6 +53,52 @@ initial begin
 	join
 	if((IR_R0 == ~12'hB80) && (IR_R1 == ~12'hB71) && (IR_R2 == ~12'hB62) && (IR_R3 == ~12'hB53) &&(IR_L0 == ~12'hB44) && (IR_L1 == ~12'hB35) && (IR_L2 == ~12'hB26) && (IR_L3 == ~12'hB17))
 		$display("congragts, the second test worked");
+	else begin
+		$display("whoops something went wrong\n your values are IR_R0 = %h\n IR_R1 = %h\n IR_R2 = %h\n IR_R3 = %h\n IR_L0 = %h\n IR_L1 = %h\n IR_L2 = %h\n IR_L3 = %h", IR_R0, IR_R1, IR_R2, IR_R3, IR_L0, IR_L1, IR_L2, IR_L3);
+		$stop();
+	end
+	
+	
+	//test 3 with timeout
+	fork
+		begin : timeout3
+			repeat(30000) @(negedge clk);
+			$display("error timed out, did not reach the correct value");
+			$stop();
+
+		end
+		begin
+			@(posedge IR_vld);
+			disable timeout3;
+			
+		end
+	
+	join
+	if((IR_R0 == ~12'hB00) && (IR_R1 == ~12'hAF1) && (IR_R2 == ~12'hAE2) && (IR_R3 == ~12'hAD3) &&(IR_L0 == ~12'hAC4) && (IR_L1 == ~12'hAB5) && (IR_L2 == ~12'hAA6) && (IR_L3 == ~12'hA97))
+		$display("congragts, the third test worked");
+	else begin
+		$display("whoops something went wrong\n your values are IR_R0 = %h\n IR_R1 = %h\n IR_R2 = %h\n IR_R3 = %h\n IR_L0 = %h\n IR_L1 = %h\n IR_L2 = %h\n IR_L3 = %h", IR_R0, IR_R1, IR_R2, IR_R3, IR_L0, IR_L1, IR_L2, IR_L3);
+		$stop();
+	end
+	
+	
+	//test 4 with timeout
+	fork
+		begin : timeout4
+			repeat(30000) @(negedge clk);
+			$display("error timed out, did not reach the correct value");
+			$stop();
+
+		end
+		begin
+			@(posedge IR_vld);
+			disable timeout4;
+			
+		end
+	
+	join
+	if((IR_R0 == ~12'hA80) && (IR_R1 == ~12'hA71) && (IR_R2 == ~12'hA62) && (IR_R3 == ~12'hA53) &&(IR_L0 == ~12'hA44) && (IR_L1 == ~12'hA35) && (IR_L2 == ~12'hA26) && (IR_L3 == ~12'hA17))
+		$display("congragts, the forth test worked");
 	else begin
 		$display("whoops something went wrong\n your values are IR_R0 = %h\n IR_R1 = %h\n IR_R2 = %h\n IR_R3 = %h\n IR_L0 = %h\n IR_L1 = %h\n IR_L2 = %h\n IR_L3 = %h", IR_R0, IR_R1, IR_R2, IR_R3, IR_L0, IR_L1, IR_L2, IR_L3);
 		$stop();
