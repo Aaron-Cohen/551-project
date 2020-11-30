@@ -52,24 +52,24 @@ module MazeRunner(clk,RST_n,SS_n,MOSI,MISO,SCLK,PWMR,PWML,
   //////////////////////////////
   // Instantiate Motor Drive //
   ////////////////////////////
-  mtr_drv mtr_drv(.clk(clk), .rst_n(rst_n), .lft_duty(lft_spd), .rght_duty(rght_spd), .DIRL(DIRL), .DIRR(DIRR), .PWML(PWML), .PWMR(PWMR))
+  mtr_drv mtr_drv(.clk(clk), .rst_n(rst_n), .lft_duty(lft_spd), .rght_duty(rght_spd), .DIRL(DIRL), .DIRR(DIRR), .PWML(PWML), .PWMR(PWMR));
   
   ///////////////////////////////////////////
   // Instantiate IR line sensor interface //
   /////////////////////////////////////////
   
   // TODO- determine how to pass FAST_SIM as a parameter to this?
-  IR_intf IR_intf(.clk(clk), .rst_n(rst_n), .MISO(MISO), .MOSI(MOSI), .SCLK, .SS_n(SS_n), .IR_en(IR_EN), .IR_vld(IR_vld), .line_present(line_present), .IR_R0(IR_R0), .IR_R1(IR_R1), .IR_R2(IR_R2), .IR_R3(IR_R3), .IR_L0(IR_L0), .IR_L1(IR_L1), .IR_L2(IR_l2), .IR_L3(IR_L3))
+  IR_intf #(FAST_SIM) IR_intf(.clk(clk), .rst_n(rst_n), .MISO(MISO), .MOSI(MOSI), .SCLK, .SS_n(SS_n), .IR_en(IR_EN), .IR_vld(IR_vld), .line_present(line_present), .IR_R0(IR_R0), .IR_R1(IR_R1), .IR_R2(IR_R2), .IR_R3(IR_R3), .IR_L0(IR_L0), .IR_L1(IR_L1), .IR_L2(IR_l2), .IR_L3(IR_L3));
 				  
   ////////////////////////////////
   // Instantiate error compute //
   //////////////////////////////
-  err_compute err_compute(.clk(clk), .rst_n(rst_n), .IR_vld(IR_vld), .IR_R0(IR_R0), .IR_R1(IR_R1), .IR_R2(IR_R2), .IR_R3(IR_R3), .IR_L0(IR_L0), .IR_L1(IR_L1), .IR_L2(IR_l2), .IR_L3(IR_L3), .error(err_raw), .err_vld(err_vld)
+  err_compute err_compute(.clk(clk), .rst_n(rst_n), .IR_vld(IR_vld), .IR_R0(IR_R0), .IR_R1(IR_R1), .IR_R2(IR_R2), .IR_R3(IR_R3), .IR_L0(IR_L0), .IR_L1(IR_L1), .IR_L2(IR_l2), .IR_L3(IR_L3), .error(err_raw), .err_vld(err_vld));
 
   ///////////////////////////////////////////////////////////////////
   // Instantiate cmd_proc block to receive & process command byte //
   /////////////////////////////////////////////////////////////////
-  <-- Instantiate your cmd_proc (Don't forget to pass FAST_SIM to it) -->
+  cmd_proc #(FAST_SIM) cmd_proc(.clk(clk), .rst_n(rst_n), .BMPL_n(BMPL_n), .BMPR_n(BMPR_n), .go(go), .err_opn_lp(err_opn_lp), .line_present(line_present), .buzz(buzz), .RX(RX));
 						
   ////////////////////////////////////////////////////////////
   // To increase volume of buzzer we drive it differential //
@@ -85,10 +85,10 @@ module MazeRunner(clk,RST_n,SS_n,MOSI,MISO,SCLK,PWMR,PWML,
   //////////////////////////////////////
   // Instantiate your PID controller //
   ////////////////////////////////////
-  <-- Instantiate your PID (Don't forget to pass FAST_SIM to it) -->
+  PID #(FAST_SIM) PID(.clk(clk), .rst_n(rst_n), .go(go), .err_vld(err_vld), .line_present(line_present), .error(error), .lft_spd(lft_spd), .right_spd(rght_spd));
 					 
 		   
-  assign LED = <-- there are 8 LEDs...do what you like...nothing is an option -->
+  assign LED = {line_present, line_present, line_present, line_present, line_present, line_present, line_present, line_present};
    
   
   
