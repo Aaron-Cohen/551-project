@@ -21,8 +21,8 @@ module MazeRunner_tb();
 	// Declare Testing variables							    //
 	/////////////////////////////////////////////////////////////
 	parameter TEST = 1;
-	reg signed [12:0] theta1, theta2, theta3, theta4;
-	int line_gone_clks;
+	reg signed [12:0] theta1, theta2, theta3, theta4, theta5;
+	int line_gone_clks, line_gone_clks2, line_gone_clks3, line_gone_clks4;
 	
 	generate
 	
@@ -35,6 +35,9 @@ module MazeRunner_tb();
 		assign cmd = 16'h5555;
 		assign theta1 = 150;
 		assign theta2 = 500;
+		assign theta3 = 0;
+		assign theta4 = 0;
+		assign theta5 = 0;
 		
 		assign line_gone_clks = 300000;
 		
@@ -49,11 +52,76 @@ module MazeRunner_tb();
 		assign cmd = 16'hFFFF;
 		assign theta1 = 150;
 		assign theta2 = -1650;
+		assign theta3 = 0;
+		assign theta4 = 0;
+		assign theta5 = 0;
 		
 		assign line_gone_clks = 1750000;
 	  
 	  
 	  
+	  end else if(TEST == 3) begin
+	  
+		/**
+		*  TEST 3 command is veer left
+		*
+		*/
+		assign cmd = 16'hAAAA;
+		assign theta1 = -150;
+		assign theta2 = -500;
+		assign theta3 = 0;
+		assign theta4 = 0;
+		assign theta5 = 0;
+		
+		assign line_gone_clks = 300000;
+		
+	  end else if(TEST == 4) begin
+		/**
+		*  TEST 4 command is stop
+		*
+		*/
+		assign cmd = 16'h0000;
+		assign theta1 = 150;
+		assign theta2 = 150;
+		assign theta3 = 0;
+		assign theta4 = 0;
+		assign theta5 = 0;
+		
+		assign line_gone_clks = 300000;
+		
+	  end else if(TEST == 5) begin
+		/**
+		*  TEST 5 command is right, turn around, left, stop
+		*
+		*/
+		assign cmd = 16'h002D;
+		assign theta1 = 150;
+		assign theta2 = 500;	//veer right
+		assign theta3 = 2300;	//turn around
+		assign theta4 = 1950;	//veer left
+		assign theta5 = 1950;	//stop
+		
+		assign line_gone_clks = 300000;
+		assign line_gone_clks2 = 1750000;
+		assign line_gone_clks3 = 300000;
+		assign line_gone_clks4 = 100000;
+		
+	  end else if(TEST == 6) begin
+		/**
+		*  TEST 6 command is left, turn around, right, stop
+		*
+		*/
+		assign cmd = 16'h001E;
+		assign theta1 = -150;
+		assign theta2 = -500;	//veer right
+		assign theta3 = -2300;	//turn around
+		assign theta4 = -1950;	//veer left
+		assign theta5 = -1950;	//stop
+		
+		assign line_gone_clks = 300000;
+		assign line_gone_clks2 = 1750000;
+		assign line_gone_clks3 = 300000;
+		assign line_gone_clks4 = 100000;
 	  end
 	
 	
@@ -115,6 +183,41 @@ module MazeRunner_tb();
 	  //new theta
 	  line_theta = theta2;
 	  
+	  //if two commands continue
+	  if(theta3 !== 0) begin
+		//wait for the maneuver
+		wait_clk_cycl(1000000, clk);
+		
+		//line gone
+		remove_line(line_gone_clks2, clk, line_present);
+		
+		//new theta
+		line_theta = theta3;
+	  end
+	
+	  //if three commands continue
+	  if(theta4 !== 0) begin
+		//wait for the maneuver
+		wait_clk_cycl(1000000, clk);
+		
+		//line gone
+		remove_line(line_gone_clks3, clk, line_present);
+		
+		//new theta
+		line_theta = theta4;
+	  end
+	  
+	  //if four commands continue
+	  if(theta4 !== 0) begin
+		//wait for the maneuver
+		wait_clk_cycl(1000000, clk);
+		
+		//line gone
+		remove_line(line_gone_clks4, clk, line_present);
+		
+		//new theta
+		line_theta = theta5;
+	  end
 	  
 	  
 	end
