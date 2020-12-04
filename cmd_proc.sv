@@ -12,28 +12,29 @@ output buzz;			// Trigger piezo buzzer
 
 parameter FAST_SIM = 1;
 
-
 UART_wrapper UART(.clk(clk), .rst_n(rst_n), .RX(RX), .clr_cmd_rdy(cap_cmd), .cmd(cmd), .cmd_rdy(cmd_rdy));
 
+// Flop to keep track of last veer direction
 reg last_veer_rght;
 always_ff @(posedge clk, negedge rst_n)
 	if(!rst_n)
-		last_veer_rght <= 0; // TODO: verify this should be 0, and not some other value
+		last_veer_rght <= 0;
 	else if (nxt_cmd)
-		last_veer_rght <= cmd_reg[1:0];
+		last_veer_rght <= cmd_reg[0]; 	// cmd_reg[1:0] == 01 is right, 10 is left. LSB can be stored on shift
+										// to next command to record whether past command had veered right. 
 
 // Shift register on cmd
 reg cmd_rdy; // State machine input
 reg cap_cmd; // State machine output for shift register to capture value of cmd
 reg [15:0] cmd;
 reg [15:0] cmd_reg;
-always_ff @(posedge clk) // Probably should gate this clock cuz enable requires a massive mux with 16-bit wide inputs? Do later cuz I'm lazy
+always_ff @(posedge clk) // Probably should gate this clock b/c enable requires a massive mux with multiple 16-bit wide inputs? Maybe will do later 
 	if(cap_cmd)
 		cmd_reg <= cmd;
 	else if (nxt_cmd)
 		cmd_reg <= {2'h0, cmd_reg[15:2]}; // shift register behavior
 
-// Creates tmr vector which other signals can be derived from(?) idk really
+// Timer register for state machine operations
 reg clr_tmr;
 reg [25:0] tmr;
 always_ff @(posedge clk, negedge rst_n)
@@ -45,16 +46,25 @@ always_ff @(posedge clk, negedge rst_n)
 		tmr <= tmr + 1;
 		
 
-// This will be used for bumper debounce conditions but I have no clue what that means ^\_(x_x)_/^
+// Determine timing parameters for turning, collision debounce, based on FAST_SIM parameter
+logic [4:0] REV_tmr1, REV_tmr2;
+logic BMP_DBNC_tmr;
 generate
 	if (FAST_SIM) begin
-	
+		// These are >= instead of == so that TURN_270 can wait for line_present to rise across 
+		// multiple cycles if it needs to after the tmr is up.
+		assign REV_tmr1 = (tmr[20:16] >= 5'h0A);
+		assign REV_tmr2 = (tmr[20:16] >= 5'h10);
+		assign BMP_DBNC_tmr = &tmr[16:0];
 	end
 	else begin
-	
+		assign REV_tmr1 = (tmr[25:21] >= 5'h16);
+		assign REV_tmr2 = (tmr[25:21] >= 5'h1F);
+		assign BMP_DBNC_tmr = &tmr[21:0];
 	end
 endgenerate
 
+// Allows for toggleable buzz signal without creating latches in state machine
 reg enable_buzz;
 reg toggle_buzz; 
 always_ff @(posedge clk, negedge rst_n)
@@ -67,7 +77,7 @@ always_ff @(posedge clk, negedge rst_n)
 
 
 // States and State Flop
-typedef enum logic [2:0] {IDLE, MOVE, TURN, VEER, COLLISION} states;
+typedef enum logic [2:0] {IDLE, MOVE, TURN_90, TURN_270, VEER, COLLISION} states;
 states state, next_state;
 always_ff @(posedge clk, negedge rst_n)
 	if(!rst_n)
@@ -93,33 +103,37 @@ always_comb begin
 			if(BMPR_n && BMPL_n) begin
 				next_state = MOVE;
 			end
-			else if (tmr >= 0.100 seconds) begin // TODO: determine value at 0.100 seconds
+			else if (BMP_DBNC_tmr) begin
 				clr_tmr = 1;
 				toggle_buzz = 1;
 			end
 		end
 		VEER : begin
 			go = 1;
-			err_opn_lp = 16'h340; // TODO: plus or minus logic
+			err_opn_lp = last_veer_rght ? 16'h340 : -16'h340;
 			if(line_present) begin // VEER state only get moved into when line_present is low, so a high line_present indicates a rise
 				nxt_cmd = 1;
 				next_state = MOVE;
 			end
 		end
-		TURN : begin
+		TURN_270: begin
 			go = 1;
-			// Cascading if/else statements allow for timer to be reused in same state.
-			if(tmr < 0.923 seconds) // TODO: find out the actual value it will be at 0.923 seconds
-				err_opn_lp = 16'h1E0; // TODO: Determine plus or minus logic
-			else if (tmr == 0.923 seconds)
-				go = 0;
-			else if (tmr < 0.923 seconds + 1.300 seconds)	// TODO: find out actual value at 1.300 + 0.923 seconds
-				err_opn_lp = 16'h380; // TODO: Determine plus or minus logic
+			if (!REV_tmr2)
+				err_opn_lp = last_veer_rght ? 16'h380 : -16'h380;
+			else if(line_present) begin // TURN states only get moved into when line_present is low, so a high line_present indicates a rise
+				// err_opn_lp is zeroed out from state machine defaults
+				nxt_cmd = 1;
+				next_state = MOVE;
+			end
+		end
+		TURN_90 : begin
+			go = 1;
+			if(!REV_tmr1)
+				err_opn_lp = last_veer_rght ? 16'h1E0 : -16'h1E0;
 			else begin
-				err_opn_lp = 0;
-				if(line_present) // TURN state only get moved to when line_present us low, so a high line_present indicates a rise
-					nxt_cmd = 1;
-					next_state = MOVE;
+				go = 0;
+				clr_tmr = 1;
+				next_state = TURN_270;
 			end
 		end
 		MOVE : begin
@@ -139,14 +153,13 @@ always_comb begin
 			
 			// Turn left/right command when cmd[1:0] == 11
 			else if (&cmd_reg[1:0]) begin 
-				go = 0; // go is cleared for one clk cycle b/c go goes high again in next state. Allows for I_term in PID to be cleared.
+				go = 0; // go is cleared for one clk cycle (go will be high again in next state). Allows for I_term in PID to be cleared.
 				clr_tmr = 1;
-				next_state = TURN;
+				next_state = TURN_90;
 			end
 			
 			// Veer left/right command when |cmd[1:0]
 			else if (|cmd_reg[1:0]) begin
-				err_opn_lp = 16'h340; // TODO: Add plus-or-minus logic here
 				next_state = VEER;
 			end
 			
