@@ -6,13 +6,26 @@ input BMPL_n;			// Active low bumper left
 input BMPR_n;			// Active low bumper right
 input RX;				// Cmd transmission from BLE (?) module
 input line_present;		// Line present from IR_intf
-output go;				// Allows FRWRD register to ramp up, is active low reset for I_term
-output err_opn_lp;		// Error magic number to override IR_intf, induces turn
-output buzz;			// Trigger piezo buzzer
+output reg go;				// Allows FRWRD register to ramp up, is active low reset for I_term
+output reg err_opn_lp;		// Error magic number to override IR_intf, induces turn
+output reg buzz;			// Trigger piezo buzzer
 
 parameter FAST_SIM = 1;
 
+reg cmd_rdy; // State machine input from UART
+reg cap_cmd; // State machine output for shift register to capture value of cmd
+reg [15:0] cmd; // cmd vector from UART before heasing to cmd register
 UART_wrapper UART(.clk(clk), .rst_n(rst_n), .RX(RX), .clr_cmd_rdy(cap_cmd), .cmd(cmd), .cmd_rdy(cmd_rdy));
+
+
+// Shift register on cmd
+reg nxt_cmd; // State machine output to get next command from c vector
+reg [15:0] cmd_reg;
+always_ff @(posedge clk) // Probably should gate this clock b/c enable requires a massive mux with multiple 16-bit wide inputs? Maybe will do later 
+	if(cap_cmd)
+		cmd_reg <= cmd;
+	else if (nxt_cmd)
+		cmd_reg <= {2'h0, cmd_reg[15:2]}; // shift register behavior
 
 // Flop to keep track of last veer direction
 reg last_veer_rght;
@@ -22,17 +35,6 @@ always_ff @(posedge clk, negedge rst_n)
 	else if (nxt_cmd)
 		last_veer_rght <= cmd_reg[0]; 	// cmd_reg[1:0] == 01 is right, 10 is left. LSB can be stored on shift
 										// to next command to record whether past command had veered right. 
-
-// Shift register on cmd
-reg cmd_rdy; // State machine input
-reg cap_cmd; // State machine output for shift register to capture value of cmd
-reg [15:0] cmd;
-reg [15:0] cmd_reg;
-always_ff @(posedge clk) // Probably should gate this clock b/c enable requires a massive mux with multiple 16-bit wide inputs? Maybe will do later 
-	if(cap_cmd)
-		cmd_reg <= cmd;
-	else if (nxt_cmd)
-		cmd_reg <= {2'h0, cmd_reg[15:2]}; // shift register behavior
 
 // Timer register for state machine operations
 reg clr_tmr;

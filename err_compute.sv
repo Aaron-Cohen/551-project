@@ -3,8 +3,8 @@ module err_compute(clk, rst_n, IR_vld, IR_R0,IR_R1,IR_R2,IR_R3,
 						
 						
 	input clk, rst_n, IR_vld;
-	output err_vld;
-	output [15:0] error;
+	output reg err_vld;
+	output reg [15:0] error;
 
 	input [11:0] IR_R0,IR_R1,IR_R2,IR_R3; // Right IR readings from inside out
 	input [11:0] IR_L0,IR_L1,IR_L2,IR_L3; // Left IR reading from inside out
