@@ -1,4 +1,4 @@
-module MazeRunner_tb();
+module MazeRunner_tb_3();
 
 	reg clk,RST_n;
 	reg send_cmd;					// assert to send travel plan via CommMaster
@@ -46,9 +46,34 @@ module MazeRunner_tb();
 	/////////////////////////////
 	// Instantiate CommMaster //
 	///////////////////////////
-	CommMaster iMST(.clk(clk), .rst_n(RST_n), .TX(RX_TX), .send_cmd(send_cmd), .cmd(cmd),
-                    .cmd_sent(cmd_sent));					  
+	CommMaster iMST(.clk(clk), .rst_n(RST_n), .TX(RX_TX), .snd_cmd(send_cmd), .cmd(cmd),
+                    .cmd_cmplt(cmd_sent));					  
 		
+
+	
+
+//task that waits a given amount of clock cycles
+task wait_clk_cycl;
+  input int clk_cycl;
+  input clk;
+  
+  repeat(clk_cycl)@(negedge clk);
+  
+endtask
+
+//task that removes the line for a given amount of clk cycles
+task remove_line;
+  input int cycl_gone;
+  input clk;
+  input line_present;
+  
+  line_present = 0;
+  
+  wait_clk_cycl(cycl_gone, clk);
+  
+  line_present = 1;
+  
+endtask
 
 	initial begin
       clk = 0;
@@ -331,28 +356,4 @@ module MazeRunner_tb();
 	  #5 clk = ~clk;
 				  
 endmodule
-
-
-//task that waits a given amount of clock cycles
-task wait_clk_cycl;
-  input int clk_cycl;
-  input clk;
-  
-  repeat(clk_cycl)@(negedge clk);
-  
-endtask
-
-//task that removes the line for a given amount of clk cycles
-task remove_line;
-  input int cycl_gone;
-  input clk;
-  input line_present;
-  
-  line_present = 0;
-  
-  wait_clk_cycl(cycl_gone, clk);
-  
-  line_present = 1;
-  
-endtask
 	

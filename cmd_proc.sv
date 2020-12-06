@@ -7,7 +7,7 @@ input BMPR_n;			// Active low bumper right
 input RX;				// Cmd transmission from BLE (?) module
 input line_present;		// Line present from IR_intf
 output reg go;				// Allows FRWRD register to ramp up, is active low reset for I_term
-output reg err_opn_lp;		// Error magic number to override IR_intf, induces turn
+output reg [15:0] err_opn_lp;		// Error magic number to override IR_intf, induces turn
 output reg buzz;			// Trigger piezo buzzer
 
 parameter FAST_SIM = 1;
