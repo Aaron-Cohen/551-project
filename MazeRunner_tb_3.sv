@@ -1,6 +1,6 @@
 module MazeRunner_tb_3();
 
-	reg clk,RST_n;
+	reg clk,RST_n;					// Clk and async reset signal
 	reg send_cmd;					// assert to send travel plan via CommMaster
 	reg [15:0] cmd;					// traval plan command word to maze runner
 	reg signed [12:0] line_theta;	// angle of line (starts at zero)
@@ -50,30 +50,24 @@ module MazeRunner_tb_3();
                     .cmd_cmplt(cmd_sent));					  
 		
 
-	
+	//Task that waits a given amount of clock cycles
+	task automatic wait_clk_cycl;
+		input int clk_cycl;
+		ref clk; // Must pass in clk value by reference, otherwise a negedge will never occur
+  
+		repeat (clk_cycl) @(negedge clk);	
+	endtask
 
-//task that waits a given amount of clock cycles
-task wait_clk_cycl;
-  input int clk_cycl;
-  input clk;
+	//Task that removes the line for a given amount of clk cycles
+	task automatic remove_line;
+		input int cycl_gone;
+		ref clk;
+		inout line_present; // Input and output
   
-  repeat(clk_cycl)@(negedge clk);
-  
-endtask
-
-//task that removes the line for a given amount of clk cycles
-task remove_line;
-  input int cycl_gone;
-  input clk;
-  input line_present;
-  
-  line_present = 0;
-  
-  wait_clk_cycl(cycl_gone, clk);
-  
-  line_present = 1;
-  
-endtask
+		line_present = 0;
+		wait_clk_cycl(cycl_gone, clk);
+		line_present = 1;
+	endtask
 
 	initial begin
       clk = 0;
@@ -96,27 +90,23 @@ endtask
 		*  TEST 1 command is veer right
 		*
 		*/
-		assign cmd = 16'h5555;
-		assign theta1 = 150;
-		assign theta2 = 500;
+		cmd = 16'h5555;
+		theta1 = 150;
+		theta2 = 500;
 		
-		assign line_gone_clks = 300000;
+		line_gone_clks = 300000;
 		
-		
-	  
 	  end else if(TEST == 2) begin
 	    
 		/**
 		*  TEST 2 command is turn around
 		*
 		*/
-		assign cmd = 16'hFFFF;
-		assign theta1 = 150;
-		assign theta2 = -1650;
+		cmd = 16'hFFFF;
+		theta1 = 150;
+		theta2 = -1650;
 		
-		assign line_gone_clks = 1750000;
-	  
-	  
+		line_gone_clks = 1750000;
 	  
 	  end else if(TEST == 3) begin
 	  
@@ -124,82 +114,85 @@ endtask
 		*  TEST 3 command is veer left
 		*
 		*/
-		assign cmd = 16'hAAAA;
-		assign theta1 = -150;
-		assign theta2 = -500;
-		
-		assign line_gone_clks = 300000;
+		cmd = 16'hAAAA;
+		theta1 = -150;
+		theta2 = -500;
+	
+		line_gone_clks = 300000;
 		
 	  end else if(TEST == 4) begin
 		/**
 		*  TEST 4 command is stop
 		*
 		*/
-		assign cmd = 16'h0000;
-		assign theta1 = 150;
-		assign theta2 = 150;
+		cmd = 16'h0000;
+		theta1 = 150;
+		theta2 = 150;
 		
-		assign line_gone_clks = 300000;
+		line_gone_clks = 300000;
 		
 	  end else if(TEST == 5 || TEST == 7) begin
 		/**
 		*  TEST 5 command is right, turn around, left, stop
 		*
 		*/
-		assign cmd = 16'h002D;
-		assign theta1 = 150;
-		assign theta2 = 500;	//veer right
-		assign theta3 = 2300;	//turn around
-		assign theta4 = 1950;	//veer left
-		assign theta5 = 1950;	//stop
+		cmd = 16'h002D;
+		theta1 = 150;
+		theta2 = 500;	//veer right
+		theta3 = 2300;	//turn around
+		theta4 = 1950;	//veer left
+		theta5 = 1950;	//stop
 		
-		assign line_gone_clks = 300000;
-		assign line_gone_clks2 = 1750000;
-		assign line_gone_clks3 = 300000;
-		assign line_gone_clks4 = 100000;
+		line_gone_clks = 300000;
+		line_gone_clks2 = 1750000;
+		line_gone_clks3 = 300000;
+		line_gone_clks4 = 100000;
 		
 	  end else if(TEST == 6 || TEST == 8) begin
 		/**
 		*  TEST 6 command is left, turn around, right, stop
 		*
 		*/
-		assign cmd = 16'h001E;
-		assign theta1 = -150;
-		assign theta2 = -500;	//veer right
-		assign theta3 = -2300;	//turn around
-		assign theta4 = -1950;	//veer left
-		assign theta5 = -1950;	//stop
+		cmd = 16'h001E;
+		theta1 = -150;
+		theta2 = -500;	//veer right
+		theta3 = -2300;	//turn around
+		theta4 = -1950;	//veer left
+		theta5 = -1950;	//stop
 		
-		assign line_gone_clks = 300000;
-		assign line_gone_clks2 = 1750000;
-		assign line_gone_clks3 = 300000;
-		assign line_gone_clks4 = 100000;
+		line_gone_clks = 300000;
+		line_gone_clks2 = 1750000;
+		line_gone_clks3 = 300000;
+		line_gone_clks4 = 100000;
 	  end
 	  
 	  //single command testing
 	  for (TEST = 1; TEST < 5; TEST++) begin
 	  //wait to get up to speed
+	  $display("Ramping up to speed");
 	  wait_clk_cycl(1500000, clk);
 	  
 	  //change line theta
 	  line_theta = theta1;
 	  
-	  //wait for the manuver 
+	  //wait for the maneuver
+	  $display("Beginning maneuver after line theta change");
 	  wait_clk_cycl(1000000, clk);
 	  
 	  //line gone
+	  $display("Removing line for %d clk cycles", line_gone_clks);
 	  remove_line(line_gone_clks, clk, line_present);
 	  
 	  //new theta
 	  line_theta = theta2;
 	  
 	  //wait to finish manuever
+	  $display("Finishing maneuver after line theta change");
 	  wait_clk_cycl(1000000,clk);
 	  
 	  //verify manuever was done correctly
 		if(theta_robot !== line_theta) begin
-			$display("ERR: For TEST %d manuever not completed correctly. theta_ robot expected to be 500,
-						but was %d" ,TEST, theta_robot);
+			$display("ERR: For TEST %d manuever not completed correctly. theta_ robot expected to be 500, but was %d" ,TEST, theta_robot);
 			$stop();
 		end
 	  end 
@@ -259,8 +252,7 @@ endtask
 	  
 	    //verify manuever was done correctly
 		  if(theta_robot !== line_theta) begin
-		    $display("ERR: For TEST %d manuever not completed correctly. theta_ robot expected to be 500,
-						but was %d" ,TEST, theta_robot);
+		    $display("ERR: For TEST %d manuever not completed correctly. theta_ robot expected to be 500, but was %d" ,TEST, theta_robot);
 			$stop();
 		end
 	  end
@@ -345,8 +337,7 @@ endtask
 	  
 	    //verify manuever was done correctly
 		  if(theta_robot !== line_theta) begin
-		    $display("ERR: For TEST %d manuever not completed correctly. theta_ robot expected to be 500,
-						but was %d" ,TEST, theta_robot);
+		    $display("ERR: For TEST %d manuever not completed correctly. theta_ robot expected to be 500, but was %d" ,TEST, theta_robot);
 			$stop();
 		end
 	  end
