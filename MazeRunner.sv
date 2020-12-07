@@ -16,22 +16,34 @@ module MazeRunner(clk,RST_n,SS_n,MOSI,MISO,SCLK,PWMR,PWML,
   input BMPL_n;		// Left front bump switch
   input BMPR_n;		// Right front bump switch
   output buzz;		// buzzer 1.526kHz tone
-  output buzz_n;
+  output buzz_n;	// buzzer differential for louder signal
   input RX;			// UART in from BLE module
   output [7:0] LED;	// LEDs for debug
   
   //////////////////////////////////////////
-  // Declare and needed internal signals //
+  // Declare any needed internal signals //
   ////////////////////////////////////////
   wire rst_n;		// global reset signal
+ 
+  
+  /*
+  These were included by Hoffman but I am not sure if this is needed.
+	
+  The CMD is sent from CommMaster in the testbench thru the RX channel and picked up by cmd_proc's internal UART wrapper.
+  Basically, cmd is ignored at this level, but is used internally at the cmd_proc level. 
+  
+  And then all the diagrams have a one-way RX line from BLE to our code, no response to BLE. I am thinking send_resp
+  might be a holdover signal from last semester and may not actually be needed
+  
   wire send_resp;	// initiate sending of response to BLE
   wire cmd_rdy;		// indicates command ready from BLE
   wire [7:0] cmd;	// 16-bit command from BLE module
   wire clr_cmd_rdy;	// knocks down cmd_rdy
+  */
   
   wire [11:0] IR_R0,IR_R1,IR_R2,IR_R3;
   wire [11:0] IR_L0,IR_L1,IR_L2,IR_L3;
-  wire IR_vld;					// asserted for 1 clock when new line_pos valid
+  wire IR_vld;				// asserted for 1 clock when new line_pos valid
   wire line_present;		// indicates a line actually present
   wire err_vld;				// new error signal valid
   wire go;
@@ -41,13 +53,12 @@ module MazeRunner(clk,RST_n,SS_n,MOSI,MISO,SCLK,PWMR,PWML,
   wire signed [11:0] lft_spd,rght_spd;
   wire bmp_raw;				// combined bump signal (not yet synchronized)
   
-  localparam FAST_SIM = 1;		// enable this when simulating fullchip in ModelSim
+  localparam FAST_SIM = 1;	// enable this when simulating fullchip in ModelSim
   
   /////////////////////////////////////
   // Instantiate reset synchronizer //
   ///////////////////////////////////
   rst_synch iRST(.clk(clk),.RST_n(RST_n),.rst_n(rst_n));
-  
 
   //////////////////////////////
   // Instantiate Motor Drive //
