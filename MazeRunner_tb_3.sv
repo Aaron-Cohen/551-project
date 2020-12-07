@@ -82,7 +82,7 @@ module MazeRunner_tb_3();
 	  
 	  send_cmd = 1;
 	  RST_n = 1;
-	  TEST = 5;
+	  TEST = 1;
 	  
 	  if(TEST == 1) begin
 		
