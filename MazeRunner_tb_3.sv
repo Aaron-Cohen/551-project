@@ -21,7 +21,7 @@ module MazeRunner_tb_3();
 	// Declare Testing variables							    //
 	/////////////////////////////////////////////////////////////
 	//parameter TEST = 1;
-	logic TEST;
+	logic [3:0] TEST;
 	reg signed [12:0] theta1, theta2, theta3, theta4, theta5, theta_robot;
 	int line_gone_clks, line_gone_clks2, line_gone_clks3, line_gone_clks4;
 	
@@ -82,7 +82,7 @@ module MazeRunner_tb_3();
 	  
 	  send_cmd = 1;
 	  RST_n = 1;
-	  TEST = 1;
+	  TEST = 5;
 	  
 	  if(TEST == 1) begin
 		
@@ -167,7 +167,7 @@ module MazeRunner_tb_3();
 	  end
 	  
 	  //single command testing
-	  for (TEST = 1; TEST < 5; TEST++) begin
+	  if (TEST > 0 && TEST < 5) begin
 	  //wait to get up to speed
 	  $display("Ramping up to speed");
 	  wait_clk_cycl(1500000, clk);
@@ -191,30 +191,34 @@ module MazeRunner_tb_3();
 	  wait_clk_cycl(1000000,clk);
 	  
 	  //verify manuever was done correctly
-		if(theta_robot !== line_theta) begin
-			$display("ERR: For TEST %d manuever not completed correctly. theta_ robot expected to be 500, but was %d" ,TEST, theta_robot);
+		if(theta_robot < (line_theta - 3) || theta_robot > (line_theta + 3)) begin
+			$display("ERR: For TEST %d manuever not completed correctly. theta_ robot expected to be near %d, but was %d" ,TEST, line_theta, theta_robot);
 			$stop();
 		end
 	  end 
 	
 	  //multiple commands testing
-	  for (TEST = 5; TEST < 7; TEST++) begin
+	  else if (TEST == 5 || TEST == 6) begin
 	    //wait to get up to speed
+		$display("Ramping up to speed");
 	    wait_clk_cycl(1500000, clk);
 	  
 	    //change line theta
 	    line_theta = theta1;
 	  
 	    //wait for the manuver 
+		$display("Beginning maneuver after line theta change");
 	    wait_clk_cycl(1000000, clk);
 	  
 	    //line gone
-	    // remove_line(line_gone_clks, clk, line_present);
+		$display("Removing line for %d clk cycles", line_gone_clks);
+	    remove_line(line_gone_clks, clk);
 	  
 	    //new theta
 	    line_theta = theta2;
 	  
-	    //wait to first finish manuever
+	    //wait to finish first manuever
+		$display("Finishing maneuver after line theta change");
 	    wait_clk_cycl(1000000,clk);
 	  
 	    //start second command
@@ -222,9 +226,11 @@ module MazeRunner_tb_3();
 	    wait_clk_cycl(1000000, clk);
 		
 	    //line gone
-	    // remove_line(line_gone_clks2, clk, line_present);
+		$display("Removing line for %d clk cycles", line_gone_clks_2);
+	    remove_line(line_gone_clks2, clk);
 		
 	    //new theta
+		$display("Beginning maneuver after line theta change");
 	    line_theta = theta3;
 	
 	    //start third command
@@ -232,9 +238,11 @@ module MazeRunner_tb_3();
 	    wait_clk_cycl(1000000, clk);
 		
 	    //line gone
-	    // remove_line(line_gone_clks3, clk, line_present);
+		$display("Removing line for %d clk cycles", line_gone_clks_3);
+	    remove_line(line_gone_clks3, clk);
 		
 	    //new theta
+		$display("Beginning maneuver after line theta change");
 	    line_theta = theta4;
 	  
 	    //start fourth command
@@ -242,24 +250,27 @@ module MazeRunner_tb_3();
 	    wait_clk_cycl(1000000, clk);
 		
 	    //line gone
-	    // remove_line(line_gone_clks4, clk, line_present);
+		$display("Removing line for %d clk cycles", line_gone_clks_4);
+	    remove_line(line_gone_clks4, clk);
 		
 	    //new theta
 	    line_theta = theta5;
 	  
 	    //wait to finish last manuever
+		$display("Finishing maneuver after line theta change");
 	    wait_clk_cycl(1000000,clk);
 	  
 	    //verify manuever was done correctly
-		  if(theta_robot !== line_theta) begin
-		    $display("ERR: For TEST %d manuever not completed correctly. theta_ robot expected to be 500, but was %d" ,TEST, theta_robot);
+		  if(theta_robot < (line_theta - 3) || theta_robot > (line_theta + 3)) begin
+		    $display("ERR: For TEST %d manuever not completed correctly. theta_ robot expected to be near %d, but was %d" ,TEST, line_theta, theta_robot);
 			$stop();
 		end
 	  end
 	  
 	  //obstruction testing
-	  for (TEST = 7; TEST < 9; TEST++) begin
+	  else if (TEST == 7 || TEST == 8) begin
 	    //wait to get up to speed
+		$display("Ramping up to speed");
 	    wait_clk_cycl(1500000, clk);
 	  
 	    //change line theta
@@ -269,12 +280,15 @@ module MazeRunner_tb_3();
 	    wait_clk_cycl(1000000, clk);
 	  
 	    //line gone
-	    // remove_line(line_gone_clks, clk, line_present);
+		$display("Removing line for %d clk cycles", line_gone_clks);
+	    remove_line(line_gone_clks, clk);
 	  
 	    //new theta
+		$display("Beginning maneuver after line theta change");
 	    line_theta = theta2;
 	  
 	    //wait to first finish manuever
+		$display("Finishing maneuver after line theta change");
 	    wait_clk_cycl(1000000,clk);
 		
 	    //start second command
@@ -283,6 +297,7 @@ module MazeRunner_tb_3();
 		
 		//obstruction before second maneuver starts
 		if(TEST == 7) begin
+		  $display("Wait for obstruction to be cleared");
 		  BMPR_n = 0;
 		  
 		  if(buzz !== 1) begin
@@ -295,6 +310,7 @@ module MazeRunner_tb_3();
 		end
 
 		if(TEST == 8) begin
+		  $display("Wait for obstruction to be cleared");
 		  BMPL_n = 0;
 		  
 		  if(buzz !== 1) begin
@@ -307,9 +323,11 @@ module MazeRunner_tb_3();
 		end 
 		
 	    //line gone
-	    // remove_line(line_gone_clks2, clk, line_present);
+		$display("Removing line for %d clk cycles", line_gone_clks_2);
+	    remove_line(line_gone_clks2, clk);
 		
 	    //new theta
+		$display("Beginning maneuver after line theta change");
 	    line_theta = theta3;
 	
 	    //start third command
@@ -317,27 +335,32 @@ module MazeRunner_tb_3();
 	    wait_clk_cycl(1000000, clk);
 		
 	    //line gone
-	    // remove_line(line_gone_clks3, clk, line_present);
+		$display("Removing line for %d clk cycles", line_gone_clks_3);
+	    remove_line(line_gone_clks3, clk);
 		
 	    //new theta
+		$display("Beginning maneuver after line theta change");
 	    line_theta = theta4;
 	  
 	    //start fourth command
 	    //wait for the maneuver
+		$display("Finishing maneuver after line theta change");
 	    wait_clk_cycl(1000000, clk);
 		
 	    //line gone
-	    // remove_line(line_gone_clks4, clk, line_present);
+		$display("Removing line for %d clk cycles", line_gone_clks_4);
+	    remove_line(line_gone_clks4, clk);
 		
 	    //new theta
 	    line_theta = theta5;
 	  
 	    //wait to finish last manuever
+		$display("Finishing maneuver after line theta change");
 	    wait_clk_cycl(1000000,clk);
 	  
 	    //verify manuever was done correctly
-		  if(theta_robot !== line_theta) begin
-		    $display("ERR: For TEST %d manuever not completed correctly. theta_ robot expected to be 500, but was %d" ,TEST, theta_robot);
+		  if(theta_robot < (line_theta - 3) || theta_robot > (line_theta + 3)) begin
+		    $display("ERR: For TEST %d manuever not completed correctly. theta_ robot expected to be near %d, but was %d" ,TEST, line_theta, theta_robot);
 			$stop();
 		end
 	  end
