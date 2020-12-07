@@ -226,7 +226,7 @@ module MazeRunner_tb_3();
 	    wait_clk_cycl(1000000, clk);
 		
 	    //line gone
-		$display("Removing line for %d clk cycles", line_gone_clks_2);
+		$display("Removing line for %d clk cycles", line_gone_clks2);
 	    remove_line(line_gone_clks2, clk);
 		
 	    //new theta
@@ -238,7 +238,7 @@ module MazeRunner_tb_3();
 	    wait_clk_cycl(1000000, clk);
 		
 	    //line gone
-		$display("Removing line for %d clk cycles", line_gone_clks_3);
+		$display("Removing line for %d clk cycles", line_gone_clks3);
 	    remove_line(line_gone_clks3, clk);
 		
 	    //new theta
@@ -250,7 +250,7 @@ module MazeRunner_tb_3();
 	    wait_clk_cycl(1000000, clk);
 		
 	    //line gone
-		$display("Removing line for %d clk cycles", line_gone_clks_4);
+		$display("Removing line for %d clk cycles", line_gone_clks4);
 	    remove_line(line_gone_clks4, clk);
 		
 	    //new theta
@@ -323,7 +323,7 @@ module MazeRunner_tb_3();
 		end 
 		
 	    //line gone
-		$display("Removing line for %d clk cycles", line_gone_clks_2);
+		$display("Removing line for %d clk cycles", line_gone_clks2);
 	    remove_line(line_gone_clks2, clk);
 		
 	    //new theta
@@ -335,7 +335,7 @@ module MazeRunner_tb_3();
 	    wait_clk_cycl(1000000, clk);
 		
 	    //line gone
-		$display("Removing line for %d clk cycles", line_gone_clks_3);
+		$display("Removing line for %d clk cycles", line_gone_clks3);
 	    remove_line(line_gone_clks3, clk);
 		
 	    //new theta
@@ -348,7 +348,7 @@ module MazeRunner_tb_3();
 	    wait_clk_cycl(1000000, clk);
 		
 	    //line gone
-		$display("Removing line for %d clk cycles", line_gone_clks_4);
+		$display("Removing line for %d clk cycles", line_gone_clks4);
 	    remove_line(line_gone_clks4, clk);
 		
 	    //new theta
