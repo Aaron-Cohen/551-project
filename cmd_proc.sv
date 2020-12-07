@@ -98,6 +98,7 @@ always_comb begin
 	enable_buzz = 0;
 	clr_tmr = 0;
 	case (state)
+		// TODO: Add debounce state for collission/buzzer
 		COLLISION : begin
 			enable_buzz = 1;
 			// Returns to move state if neither collision signal is asserted, otherwise will toggle
@@ -142,7 +143,7 @@ always_comb begin
 			go = 1;
 			// Presence of a line must be exclusively detected first as subsequent logic must
 			// only occur if there is not a line present
-			if(line_present)
+			if(line_present) begin
 				// If either active low bumper is asserted, kickoff collision sequence
 				if(!(BMPR_n && BMPL_n)) begin
 					go = 0;
@@ -152,7 +153,7 @@ always_comb begin
 					next_state = COLLISION;	
 				end
 				// Otherwise, if line present but no collision, remain in move state.
-			
+			end
 			// Turn left/right command when cmd[1:0] == 11
 			else if (&cmd_reg[1:0]) begin 
 				go = 0; // go is cleared for one clk cycle (go will be high again in next state). Allows for I_term in PID to be cleared.

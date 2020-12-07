@@ -58,7 +58,6 @@ module MazeRunner(clk,RST_n,SS_n,MOSI,MISO,SCLK,PWMR,PWML,
   // Instantiate IR line sensor interface //
   /////////////////////////////////////////
   
-  // TODO- determine how to pass FAST_SIM as a parameter to this?
   IR_intf #(FAST_SIM) IR_intf(.clk(clk), .rst_n(rst_n), .MISO(MISO), .MOSI(MOSI), .SCLK, .SS_n(SS_n), .IR_en(IR_EN), .IR_vld(IR_vld), .line_present(line_present), .IR_R0(IR_R0), .IR_R1(IR_R1), .IR_R2(IR_R2), .IR_R3(IR_R3), .IR_L0(IR_L0), .IR_L1(IR_L1), .IR_L2(IR_L2), .IR_L3(IR_L3));
 				  
   ////////////////////////////////

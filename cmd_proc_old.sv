@@ -1,4 +1,4 @@
-module cmd_proc(clk, rst_n, BMPL_n, BMPR_n, go, err_opn_lp, line_present, buzz, RX);
+module cmd_proc_old(clk, rst_n, BMPL_n, BMPR_n, go, err_opn_lp, line_present, buzz, RX);
 
 input clk;				// Operational Clock
 input rst_n;			// Async active low reset

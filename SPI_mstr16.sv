@@ -1,155 +1,126 @@
+// Aaron Cohen - 10/23/2020
 module SPI_mstr16(clk, rst_n, SS_n, SCLK, MOSI, MISO, wrt, cmd, done, rd_data);
 
-	input clk, rst_n, wrt, MISO;
-	input [15:0] cmd;
-
-	output reg [15:0] rd_data;
-	output reg done, SS_n, SCLK, MOSI;
-
-	reg [4:0] bitcnt;
-	reg [5:0] sclk_cnt;
-	reg [15:0] shft_reg;
-	reg init, rst_cnt, shft, smpl, sclk_clr, clr_done, set_done;
-	reg MISO_smpl;
+input clk, rst_n;			// clock and asynch reset
+input wrt; 					// High for 1 clock period to initiate SPI transaction
+input MISO;					// Feedback from slave to master
+input [15:0] cmd;			// Initial command or data sent from master to slave
+output SCLK, MOSI; 			// SPI protocol signals
+output reg SS_n;
+output reg done; 			// Asserted when SPI complete
+output [15:0] rd_data;  	// Data from SPI slave
 
 
-	typedef enum reg [1:0] {IDLE, TRANS, FRONT, BACK} state_t;
-	state_t state, nextState;  //create states
 
+reg [15:0] shift_register;  // As MOSI shifts out, MISO shifts in
+reg [5:0] sclk_div;			// Increments on clk, every 64 clk cycles, MSB (i.e. sclk) flips
+reg [3:0] sclk_cnt; 		// Keepts track of how many times sclk has been asserted
+reg MISO_smpl;				// MISO sample to be shifted in
+reg sclk_done;				// True when 16 cycles of sclk have occured
+reg smpl, shft, init, rst_cnt; // State machine command signals
+
+// Due to carrying on MSB, these values indicate to SM that SCLK is about to transition
+localparam impending_fall  = 6'b111111;
+localparam impending_rise  = 6'b011111;
+
+// SCLK generator
+always_ff @(posedge clk, negedge rst_n)
+	if(!rst_n)
+		sclk_div <= 6'b101111;
+	else if(init || rst_cnt) // SYNC reset
+		sclk_div <= 6'b101111; 
+	else
+		sclk_div <= sclk_div + 1'b1;
+assign SCLK = sclk_div[5]; // MSB flips every 64 cycles as lesser significant bits increment
+
+// SCLK Cycle (bit) counter
+always_ff @(posedge clk)
+	if(init)
+		sclk_cnt <= 0;
+	else if(sclk_div == impending_rise)
+		sclk_cnt <= sclk_cnt + 1;
+assign sclk_done = &sclk_cnt;	// Due to flopping nature here, sclk_cnt lags behind by a value of 1 from where the SM would like to "think" it is.
+								// As a result, by saying we are done at 15 (&reduction on 0xF), state machine cuts off at where it thinks it is at 16.
+
+
+// States and State Flop
+typedef enum logic [1:0] {IDLE = 2'b00 , FRONT_PORCH = 2'b01, SHIFT = 2'b10, BACK_PORCH = 2'b11} states;
+states state, next_state;
+always_ff @(posedge clk, negedge rst_n)
+	if(!rst_n)
+		state <= IDLE;
+	else
+		state <= next_state;
+		
+// Sample MISO when smpl signal asserted.
+always_ff @(posedge clk)
+	if(smpl)
+		MISO_smpl <= MISO;
+
+// Load/Shift shift register.
+always_ff @(posedge clk)
+	if(init)
+		shift_register <= cmd;
+	else if (shft)
+		shift_register <= {shift_register[14:0], MISO_smpl};
+assign rd_data = shift_register;
+assign MOSI = shift_register[15];
 	
-	//continuous assign statements
-	assign SCLK = sclk_cnt[5];
-	assign MOSI = shft_reg[15];
-	assign rd_data = shft_reg;
+// Flop output of SS_n signal
+always_ff @(posedge clk, negedge rst_n) 
+	if (!rst_n) // Preset
+		SS_n <= 1'b1;
+	else if (init)
+		SS_n <= 1'b0;
+	else if (rst_cnt) // Lock SS_n high if done or setting done
+		SS_n <= 1'b1;
 		
-	
+// Flop output of done signal
+always_ff @(posedge clk, negedge rst_n) 
+	if (!rst_n)
+		done <= 1'b0;
+	else if (init)
+		done <= 1'b0;
+ 	else if (rst_cnt)
+		done <= 1'b1;
 
-
-	//state machine
-	always_ff@(posedge clk, negedge rst_n) begin
-		init = 0;			//initialize values all to 0 and start in IDLE
-		rst_cnt = 0;
-		shft = 0;
-		smpl = 0;
-		clr_done = 0;
-		set_done = 0;
-		sclk_clr = 0;
-		nextState = IDLE;
-		
-		case(state)
-		
-		
-				
-		FRONT : if(sclk_cnt == 6'b111111) begin //wait in FRONT until SCLK is about to go low
-				
-				nextState = TRANS;				//then go to TRANS
-				end else begin			
-				nextState = FRONT;
-				end
-				
-		TRANS : if(bitcnt == 15 && sclk_cnt == 6'b011111) begin		//on the last bit of MISO and rising edge of SCLK
-																	//set_done to 1 still enable sclk_cnt and sample the last bit
-				sclk_clr = 1;
-				smpl = 1;
-				nextState = BACK;									//then go to BACK
-				
-				end else if(sclk_cnt == 6'b011111) begin			//on rising edge of SCLK
-				smpl = 1;											//sample the bit and keep sclk_cnt enabled
-							
-				nextState = TRANS;									//stay in TRANS
-				
-				end else if(sclk_cnt == 6'b111111) begin			//on falling edge of SCLK
-				shft = 1;											//shift the register storing the bits and keep sclk_cnt enabled
-							
-				nextState = TRANS;									//stay in TRANS
-				
-				end else begin										//Otherwise stay in TRANS with sclk counting
-				
-				nextState = TRANS;
-				end
-		
-		BACK : if(sclk_cnt == 6'b111111) begin	//on the falling edge of SCLK
-				shft = 1;						//shift the register holding the bits and set_done to 1
-				set_done = 1;
-				nextState = IDLE;
-				sclk_clr = 1;					//then go to IDLE
-				end else begin
-				nextState = BACK;				//Otherwise stay in BACK
-				end
-				
-		default : if(wrt) begin		//IDLE default
-				init = 1;			//on wrt we initialize and rst_cnt and clear done
-				rst_cnt = 1;		//then go to FRONT
-				nextState = FRONT;
-				clr_done = 1;
-				end else
-				sclk_clr = 1;
-							//sitting in IDLE
-		
-		endcase
-	end
-
-	//MOSI
-	always@(posedge clk) begin
-		if(init)					//on init we put the cmd into the shft_reg
-			shft_reg <= cmd;
-		else if(shft) 									//on shft we shift in the MISO_smpl
-			shft_reg <= {shft_reg[14:0], MISO_smpl};
-	end
-	//MISO
-	always@(posedge clk) begin
-		if(smpl)				//on smpl we put the MISO into MISO_smpl
-			MISO_smpl <= MISO;
-
-	end
-
-	//done block
-	always@(posedge clk, negedge rst_n) begin
-		if(!rst_n)			//on !rst_n we set done to 0 - asynch
-			done <=0;
-		else if(clr_done)	//on clr_done we set done to 0
-			done <= 0;
-		else if(set_done)	//on set_done we set done to 1
-			done<= 1;
-	end
-
-	//SS-n block
-	always@(posedge clk, negedge rst_n) begin
-		if(!rst_n)		 	//on !rst_n we set SS_n to 1 - asynch
-			SS_n <= 1;
-		else if(set_done)	//on set_done we set SS_n to 0
-			SS_n <= 0;
-		else if(wrt)
-			SS_n <= 0;
-		else
-			SS_n <= done;	//SS_n gets done 
-	end
-
-	//create SCLK
-	always @(posedge clk) begin
-		if(rst_cnt) 				//on rst_cnt we preset sclk_cnt to given value
-			sclk_cnt <= 6'b101111;
-		else if(sclk_clr)
-			sclk_cnt <= 6'b101111;
-		else 						//otherwise we increment
-			sclk_cnt <= sclk_cnt + 1;
-	end
-
-	//shift counter
-	always@(posedge clk) begin	
-		 if(rst_cnt)					//when rst_cnt clear bitcnt
-			bitcnt <= 0;
-		else if(shft)				//when shift bitcnt plus one
-			bitcnt <= bitcnt + 1;
-	end
-
-	//state flops
-	always @(posedge clk or negedge rst_n)
-		if (!rst_n)
-			state <= IDLE;
-		else
-			state <= nextState;
-
-
+// State Machine
+always_comb begin
+	// Default outputs for state machine
+	smpl 	   = 1'b0;
+	init 	   = 1'b0;
+	shft 	   = 1'b0;
+	rst_cnt    = 1'b0;
+	next_state = state;
+	case (state)
+	 FRONT_PORCH : begin
+		if(sclk_div == impending_fall) // Only move to SHIFT upon SCLK falling
+			next_state = SHIFT; 
+	 end
+	 SHIFT : begin
+		if(sclk_div == impending_rise) begin
+			smpl = 1'b1;  // Sample MISO on SCLK rise
+			if(sclk_done) // After 15 SCLK cycles,
+				next_state = BACK_PORCH;
+		end
+		else if (sclk_div == impending_fall)
+			shft = 1'b1; // Shift MOSI and shift register
+	 end
+	 BACK_PORCH : begin
+		if (sclk_div == impending_fall) begin
+			shft = 1'b1;      // Final shift
+			rst_cnt = 1'b1; // Will cause SS_n to be asserted, also keeps SCLK high. Doubles as a set_done signal
+			next_state = IDLE;
+		end
+	 end
+	 default : begin // Default to IDLE state, waits for write signal
+		rst_cnt = 1'b1; // Lock SS_n high
+		if(wrt) begin
+			next_state = FRONT_PORCH;
+			init = 1'b1;
+		end
+	 end
+	endcase
+  end
 
 endmodule
