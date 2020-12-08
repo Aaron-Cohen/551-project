@@ -20,7 +20,8 @@ module MazeRunner_tb_4();
 	///////////////////////////////////////////////////////////////
 	// Declare Testing variables							    //
 	/////////////////////////////////////////////////////////////
-
+	
+	integer i;
 	parameter FAST_SIM = 1;
 	reg signed [12:0] theta_robot;
 	
@@ -72,8 +73,12 @@ module MazeRunner_tb_4();
 		wait_clks(2);
 		send_cmd = 0;
 	endtask
-
-	// Task to test basic veer functionality. Note: it is bad to change veer by more than 250 (25 degrees), perform changes larger than that in steps.
+	
+	//////////////////////////////////////////////////////////
+	// Task to test basic veer functionality.				//
+	// Note: it is bad to change veer by more than 250 (25  //
+	// degrees), perform changes larger than that in steps. //
+	//////////////////////////////////////////////////////////
 	task test_one;
 		$display("Testing veer right command when line is lost, with a change in line_theta");
 		
@@ -128,7 +133,68 @@ module MazeRunner_tb_4();
 		$stop();
 	endtask
 	
-	// Task to test basic veer left functionality.
+	/////////////////////////////////////////////////////////////////
+	// Task to test turn around functionality at first gap of line //
+	/////////////////////////////////////////////////////////////////
+	task test_two; // TODO: line_theta value not right, still working on it, though!
+		$display("Testing turn around command at first gap in line");
+		
+		set_cmd(16'h0003);
+		line_theta = 0;
+	  
+		// Wait to get up to speed
+		$display("Ramping up to speed for %d clk cycles...", 1500000);
+		wait_clks(1500000);
+	  
+		// Change line theta
+		line_theta = 150;
+		$display("Changing line theta to %d", line_theta);
+	  
+		// React to change in line theta
+		$display("Changing motor speeds to adjust to line theta difference");
+		wait_clks(3000000);
+		
+		// 2.5mil clocks, first gap is encountered, robot starts turn around maneuver
+		$display("Wait 2.5 mil clocks for first gap, robot then starts turn around maneuver");
+		wait_clks(2500000);
+		line_present = 0;
+		
+		// Gradually increase line_theta via loop to begin veer to right
+		$display("Gradually change line theta to %d", line_theta);
+		for (i = 0; i < 1050; i = i + 1) begin
+			line_theta = line_theta + 1;
+			wait_clks(10);
+		end
+		
+		// Encounters line again at 1.75mil clocks
+		wait_clks(1750000);
+		line_present = 1;
+		
+		// Gradually decrease line_theta via loop to finish turn around
+		$display("Gradually change line theta to %d", line_theta);
+		for (i = 0; i < 2700; i = i + 1) begin
+			line_theta = line_theta - 1;
+			wait_clks(10);
+		end
+		
+		// End, line is 180 degrees from 15 degree when it started maneuver
+		// line_theta = -1650;
+		$display("Changing line theta to %d", line_theta);
+		
+		// React to change in line theta
+		$display("Changing motor speeds to adjust to line theta difference");
+		wait_clks(3000000);
+	  
+		// Verify manuever was done correctly
+		if(theta_robot < (line_theta - 10) || theta_robot > (line_theta + 10)) begin
+			$display("ERR: For TEST %d manuever not completed correctly. theta_ robot expected to be near %d, but was %d" , 2, line_theta, theta_robot);
+		end 
+		$stop();
+	endtask
+	
+	/////////////////////////////////////////////////
+	// Task to test basic veer left functionality. //
+	/////////////////////////////////////////////////
 	task test_three;
 		$display("Testing veer left command when line is lost, with a change in line_theta");
 		
@@ -198,7 +264,7 @@ module MazeRunner_tb_4();
 		wait_clks(1);
 		
 		test_one;
-		
+		test_two;
 		test_three;
 	  end
 	
