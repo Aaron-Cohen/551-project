@@ -50,21 +50,27 @@ module MazeRunner_tb_4();
                     .cmd_cmplt(cmd_sent));					  
 		
 
-	// Task that waits a given amount of clock cycles
+	/*
+		Task to wait a certain amount of clock cycles.
+	*/
 	task automatic wait_clks;
 		input int clk_cycl;	// Amount of clock cycles to wait
 		repeat (clk_cycl) @(negedge clk);	
 	endtask
 
-	// Task that removes the line for a given amount of clk cycles
+	/* 
+		Task that removes the line for a given amount of clk cycles
+	*/
 	task automatic remove_line;
 		input int cycl_gone;
-		
 		line_present = 0;
 		wait_clks(cycl_gone);
 		line_present = 1;
 	endtask
 	
+	/*
+		Task to set the command of MazeRunner
+	*/
 	task automatic set_cmd;
 		input [15:0] arg; // 16 bit hex command vector
 		cmd = arg;
@@ -74,6 +80,9 @@ module MazeRunner_tb_4();
 		send_cmd = 0;
 	endtask
 	
+	/*
+		Task to change line_theta "smoothly"
+	*/
 	task automatic modify_theta;
 		input int theta;
 
@@ -106,6 +115,11 @@ module MazeRunner_tb_4();
 		end
 	endtask
 	
+	/*
+		Task to check if theta_robot is similar to line_theta
+		If close but not similar enough, task will allot more
+		time and check again recursively.
+	*/
 	task automatic validate_theta;
 		integer difference = line_theta - theta_robot;
 		if(difference < 0)
@@ -132,12 +146,18 @@ module MazeRunner_tb_4();
 				passes = passes + 1;
 	endtask
 	
+	/*
+		Task to modify and validate theta in one easy step.
+	*/
 	task automatic modify_and_validate_theta;
 		input int theta;
 		modify_theta(theta);
 		validate_theta;
 	endtask
-		
+	
+	/*
+		Task to set up each test fresh. Run before each test task.
+	*/
 	task automatic test_setup;
 		// Initial conditions
 		clk = 0;
@@ -159,6 +179,9 @@ module MazeRunner_tb_4();
 		wait_clks(1500000);
 	endtask
 	
+	/*
+		Task to print out a summary of passed in test number, and amount of succcesfull subtests.
+	*/
 	task test_results_summary;
 		input int test_number;
 		if(fails == 0 && passes > 0)
@@ -170,7 +193,7 @@ module MazeRunner_tb_4();
 	//////////////////////////////////////////////////////////
 	// Task to test basic line-following functionalities	//
 	//////////////////////////////////////////////////////////
-	task test_one;
+	task automatic test_one;
 	
 		$display("Test 1: MazeRunner orientation in response to sequence of changes to line_theta");
 		test_setup; // Do this before each test to reset to start conditions
@@ -191,7 +214,7 @@ module MazeRunner_tb_4();
 	/////////////////////////////////////////////////////////////////
 	// Task to test turn around functionality at first gap of line //
 	/////////////////////////////////////////////////////////////////
-	task test_two; // TODO: line_theta value not right, still working on it, though!
+	task automatic test_two; // TODO: line_theta value not right, still working on it, though!
 		$display("Testing turn around command at first gap in line");
 		
 		set_cmd(16'h0003);
@@ -250,7 +273,7 @@ module MazeRunner_tb_4();
 	/////////////////////////////////////////////////
 	// Task to test basic veer left functionality. //
 	/////////////////////////////////////////////////
-	task test_three;
+	task automatic test_three;
 		$display("Testing veer left command when line is lost, with a change in line_theta");
 		
 		set_cmd(16'h0002);
