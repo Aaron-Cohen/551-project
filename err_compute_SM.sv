@@ -38,8 +38,7 @@ module err_compute_SM(clk, rst_n, IR_vld, sel, clr_accum, en_accum, err_vld);
 		default : if(IR_vld) begin 		//IDLE default state 
 				nxt_state = ACCUM;  	//when IR_vld nxt_state is ACCUM and clr_accum
 				clr_accum = 1;
-				end else if(cnt == 8)   //When cnt is 8 we keep err_vld
-				err_vld = 1;
+				end
 	  endcase
 	end
 

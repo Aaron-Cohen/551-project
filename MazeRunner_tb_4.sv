@@ -21,7 +21,7 @@ module MazeRunner_tb_4();
 	// Declare Testing variables							    //
 	/////////////////////////////////////////////////////////////
 	
-	integer i;
+	integer passes, fails, i;
 	parameter FAST_SIM = 1;
 	reg signed [12:0] theta_robot;
 	
@@ -78,13 +78,14 @@ module MazeRunner_tb_4();
 		input int theta;
 
 		// Slowly ramp up line_theta to theta
-		$display("Changing line theta to %d", theta);
 		while( theta != line_theta ) begin
 			// Case: Positive change in theta
 			if(theta > line_theta) begin
 				// Subcase: large change (greater than 25 degrees)
-				if( theta - line_theta > 250)
+				if( theta - line_theta > 250) begin
 					line_theta = line_theta + 250;
+					wait_clks(500000);
+				end
 				// Subcase: small change (less than 25 degrees)
 				else
 					line_theta = theta;
@@ -93,25 +94,42 @@ module MazeRunner_tb_4();
 			// Case: Negative change in theta
 			else begin
 				// Subcase: large change (greater than 25 degrees)
-				if( line_theta - theta > 250)
+				if( line_theta - theta > 250) begin
 					line_theta = line_theta - 250;
+					wait_clks(500000);
+				end
 				// Subcase: small change (less than 25 degrees)
 				else 
 					line_theta = theta;
 			end
-			wait_clks(3000000);
+			wait_clks(1500000);
 		end
-		
-		$display("Line_theta change complete");	
 	endtask
 	
-	task validate_theta;
-		if(theta_robot < (line_theta - 10) || theta_robot > (line_theta + 10)) begin
-			$display("ERR: theta_robot expected to be near %d, but was %d", line_theta, theta_robot);
-			$stop();
+	task automatic validate_theta;
+		integer difference = line_theta - theta_robot;
+		if(difference < 0)
+			difference = difference * (-1);
+		
+		if(difference > 10) begin
+				// Two possible scenarios if the first validation check fails: the theta was completely off, or perhaps
+				// the theta was just outside the barrier and needs more time to get within the acceptable range. For
+				// the latter, we give it more time to fall in the acceptable 1 degree range, and then recursively
+				// validate it again.
+				// 
+				// If the test is completely off, we just want to fail, but integral windup in the PID could be responsible
+				// if the term is just outside of the acceptable range so we will take that into account.
+				if (difference < 20) begin
+					wait_clks(3500000);
+					validate_theta;
+				end
+				else begin
+					$display("ERROR: theta_robot expected to be near %d, but was %d", line_theta, theta_robot);
+					fails = fails + 1;
+				end
 		end
 		else
-			$display("GOOD: theta_robot matches line_theta with values of %d and %d respectively", theta_robot, line_theta);
+				passes = passes + 1;
 	endtask
 	
 	task automatic modify_and_validate_theta;
@@ -119,31 +137,46 @@ module MazeRunner_tb_4();
 		modify_theta(theta);
 		validate_theta;
 	endtask
-	
-	task automatic ramp_up;
-		line_theta = 0;
-		$display("Ramping up to speed for %d clk cycles...", 1500000);
+		
+	task automatic test_setup;
+		// Initial conditions
+		clk = 0;
+		RST_n = 0;
+		send_cmd = 0;
+		line_theta = 0; 
+		line_present = 1;
+		BMPL_n = 1;
+		BMPR_n = 1;
+		passes = 0;
+		fails = 0;
+		
+		// Reset everything
+		wait_clks(5);
+		RST_n = 1;
+		wait_clks(1);
+		
+		// Ramp MazeRunner up to speed
 		wait_clks(1500000);
 	endtask
 	
+	task test_results_summary;
+		input int test_number;
+		if(fails == 0 && passes > 0)
+			$display("Good: All %d tests passed for Test: %d", passes, test_number);
+		else
+			$display("ERROR: %d tests passed and %d tests failed for Test: %d", passes, fails, test_number);
+	endtask
+	
 	//////////////////////////////////////////////////////////
-	// Task to test basic veer functionality.				//
-	// Note: it is bad to change veer by more than 250 (25  //
-	// degrees), perform changes larger than that in steps. //
+	// Task to test basic line-following functionalities	//
 	//////////////////////////////////////////////////////////
 	task test_one;
-		$display("Testing veer right command when line is lost, with a change in line_theta");
-		set_cmd(16'h0001);
-		// Wait to get up to speed
-		ramp_up;
-
+	
+		$display("Test 1: MazeRunner orientation in response to sequence of changes to line_theta");
+		test_setup; // Do this before each test to reset to start conditions
+		set_cmd(16'hAAAA); // Unused, but there must be a non 00 command, otherwise MazeRunner remains in IDLE state.
+		
 		modify_and_validate_theta(150);
-		
-		// Remove line
-		///$display("Removing line for %d clk cycles. Induce VEER", 300000);
-		//remove_line(300000);		
-		//$display("Restore line post VEER.");
-		
 		modify_and_validate_theta(250);
 		modify_and_validate_theta(600);
 		modify_and_validate_theta(200);
@@ -152,6 +185,7 @@ module MazeRunner_tb_4();
 		modify_and_validate_theta(-150);
 		modify_and_validate_theta(0);
 		
+		test_results_summary(1); // Do this after each test to get summary.
 	endtask
 	
 	/////////////////////////////////////////////////////////////////
@@ -270,31 +304,13 @@ module MazeRunner_tb_4();
 		$stop();
 	endtask
 
-	task setup;
-		clk = 0;
-		RST_n = 0;
-		send_cmd = 0;
-		line_theta = 0; 
-		line_present = 1;
-		BMPL_n = 1;
-		BMPR_n = 1;
-		wait_clks(5);
-		
-		RST_n = 1;
-		wait_clks(1);
-	endtask
-
 	integer start_time, end_time;
 	initial begin
-		start_time = $time();
 		// Set up initial conditions
-		setup;
 		
 		test_one;
 		//test_two;
 		//test_three;
-		end_time = $time();
-		$display("Total amount of time taken: ", end_time - start_time);
 		$stop();
 	  end
 	

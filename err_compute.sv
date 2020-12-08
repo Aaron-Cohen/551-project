@@ -23,20 +23,18 @@ module err_compute(clk, rst_n, IR_vld, IR_R0,IR_R1,IR_R2,IR_R3,
 		.error(error_old));
 	
 	//error block
-	always@(posedge clk, negedge rst_n) begin
+	always_ff @(posedge clk, negedge rst_n)
 		if(!rst_n)
-			error <= 0;
+			error <= 1'b0;
 		else if(err_vld_old)
 			error <= error_old;
-	end
 
-	//err_vld block
-	always@(posedge clk, negedge rst_n) begin
-		if(!rst_n)
-			err_vld <= 0;
-		else 
-			err_vld <= err_vld_old;
-	end
+	//err_vld block - note that err_vld should only be up for 1 cycle, otherwise PID accumulator will get maxed out
+	always @(posedge clk)
+		 if (err_vld_old) // Preset
+			err_vld <= 1'b1;
+		else			  // Does not require async reset because value always 0, unless preset.
+			err_vld <= 1'b0;
 
 
 endmodule
