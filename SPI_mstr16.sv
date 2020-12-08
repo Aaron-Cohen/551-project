@@ -1,126 +1,152 @@
-// Aaron Cohen - 10/23/2020
-module SPI_mstr16(clk, rst_n, SS_n, SCLK, MOSI, MISO, wrt, cmd, done, rd_data);
+// From Prof. Hoffman
+module SPI_mstr16(clk,rst_n,SS_n,SCLK,MOSI,MISO,wrt,cmd,done,rd_data);
 
-input clk, rst_n;			// clock and asynch reset
-input wrt; 					// High for 1 clock period to initiate SPI transaction
-input MISO;					// Feedback from slave to master
-input [15:0] cmd;			// Initial command or data sent from master to slave
-output SCLK, MOSI; 			// SPI protocol signals
-output reg SS_n;
-output reg done; 			// Asserted when SPI complete
-output [15:0] rd_data;  	// Data from SPI slave
-
-
-
-reg [15:0] shift_register;  // As MOSI shifts out, MISO shifts in
-reg [4:0] sclk_div;			// Increments on clk, every 64 clk cycles, MSB (i.e. sclk) flips
-reg [3:0] sclk_cnt; 		// Keepts track of how many times sclk has been asserted
-reg MISO_smpl;				// MISO sample to be shifted in
-reg sclk_done;				// True when 16 cycles of sclk have occured
-reg smpl, shft, init, rst_cnt; // State machine command signals
-
-// Due to carrying on MSB, these values indicate to SM that SCLK is about to transition
-localparam impending_fall  = 5'b11111;
-localparam impending_rise  = 5'b01111;
-
-// SCLK generator
-always_ff @(posedge clk, negedge rst_n)
-	if(!rst_n)
-		sclk_div <= 5'b10111;
-	else if(init || rst_cnt) // SYNC reset
-		sclk_div <= 5'b10111; 
-	else
-		sclk_div <= sclk_div + 1'b1;
-assign SCLK = sclk_div[4]; // MSB flips every 64 cycles as lesser significant bits increment
-
-// SCLK Cycle (bit) counter
-always_ff @(posedge clk)
-	if(init)
-		sclk_cnt <= 0;
-	else if(sclk_div == impending_rise)
-		sclk_cnt <= sclk_cnt + 1;
-assign sclk_done = &sclk_cnt;	// Due to flopping nature here, sclk_cnt lags behind by a value of 1 from where the SM would like to "think" it is.
-								// As a result, by saying we are done at 15 (&reduction on 0xF), state machine cuts off at where it thinks it is at 16.
-
-
-// States and State Flop
-typedef enum logic [1:0] {IDLE = 2'b00 , FRONT_PORCH = 2'b01, SHIFT = 2'b10, BACK_PORCH = 2'b11} states;
-states state, next_state;
-always_ff @(posedge clk, negedge rst_n)
-	if(!rst_n)
-		state <= IDLE;
-	else
-		state <= next_state;
-		
-// Sample MISO when smpl signal asserted.
-always_ff @(posedge clk)
-	if(smpl)
-		MISO_smpl <= MISO;
-
-// Load/Shift shift register.
-always_ff @(posedge clk)
-	if(init)
-		shift_register <= cmd;
+  input clk,rst_n;
+  input wrt;
+  input [15:0] cmd;
+  input MISO;
+  output reg done;		// done will come from a flop
+  output reg SS_n;		// SS will come from a flop
+  output SCLK, MOSI;
+  output [15:0] rd_data;
+  
+  typedef enum reg[1:0] {IDLE, FRNT_PRCH, MAIN, BCK_PRCH} state_t;
+  state_t state, nxt_state;
+  
+  //////////////////////////////
+  // Define needed registers //
+  ////////////////////////////
+  reg [15:0] shft_reg;
+  reg [4:0] sclk_div;
+  reg MISO_smpl;
+  reg [3:0] bit_cnt;
+  
+  ////////////////////////////
+  // State Machine Outputs //
+  //////////////////////////
+  logic set_done,initialize,rst_sclk_div,shft,smpl;
+  
+  ////////////////////////////////////////
+  // define any needed internal signal //
+  //////////////////////////////////////
+  wire SCLK_rise_nxt, SCLK_fall_nxt;
+  
+  ////////////////////////////////
+  // infer main shift register //
+  //////////////////////////////
+  always @(posedge clk)
+    if (initialize)
+	  shft_reg <= cmd;
 	else if (shft)
-		shift_register <= {shift_register[14:0], MISO_smpl};
-assign rd_data = shift_register;
-assign MOSI = shift_register[15];
+	  shft_reg <= {shft_reg[14:0],MISO_smpl};
+	  
+  assign rd_data = shft_reg;
+  assign MOSI = shft_reg[15];
 	
-// Flop output of SS_n signal
-always_ff @(posedge clk, negedge rst_n) 
-	if (!rst_n) // Preset
-		SS_n <= 1'b1;
-	else if (init)
-		SS_n <= 1'b0;
-	else if (rst_cnt) // Lock SS_n high if done or setting done
-		SS_n <= 1'b1;
-		
-// Flop output of done signal
-always_ff @(posedge clk, negedge rst_n) 
-	if (!rst_n)
-		done <= 1'b0;
-	else if (init)
-		done <= 1'b0;
- 	else if (rst_cnt)
-		done <= 1'b1;
-
-// State Machine
-always_comb begin
-	// Default outputs for state machine
-	smpl 	   = 1'b0;
-	init 	   = 1'b0;
-	shft 	   = 1'b0;
-	rst_cnt    = 1'b0;
-	next_state = state;
+  /////////////////////////////////////////////
+  // Infer flop to sample MISO on SCLK rise //
+  ///////////////////////////////////////////
+  always @(posedge clk)
+    if (smpl)
+	  MISO_smpl <= MISO;
+	  
+  /////////////////////////////////
+  // Infer divider to make SCLK //
+  ///////////////////////////////
+  always @(posedge clk)
+    if (rst_sclk_div)
+	  sclk_div <= 5'b10111;
+	else
+	  sclk_div <= sclk_div + 1;
+	  
+  assign SCLK = sclk_div[4];
+  assign SCLK_fall_nxt = &sclk_div;
+  assign SCLK_rise_nxt = ~sclk_div[4] & &sclk_div[3:0];
+  
+  ////////////////////
+  // Infer bit_cnt //
+  //////////////////
+  always @(posedge clk)
+    if (initialize)
+	  bit_cnt <= 4'b0000;
+	else if (shft)
+	  bit_cnt <= bit_cnt + 1;
+	  
+  //////////////////////
+  // Infer done flop //
+  ////////////////////
+  always @(posedge clk,negedge rst_n)
+    if (!rst_n)
+	  done <= 1'b0;			// starts as 0
+	else if (set_done)
+	  done <= 1'b1;
+	else if (initialize)
+	  done <= 1'b0;
+	  
+  /////////////////
+  // Infer SS_n //
+  ///////////////
+  always @(posedge clk,negedge rst_n)
+    if (!rst_n)
+	  SS_n <= 1'b1;			// starts as 1
+	else if (set_done)
+	  SS_n <= 1'b1;
+	else if (initialize)
+	  SS_n <= 1'b0;
+	  
+  ////////////////////////
+  // Infer state flops //
+  //////////////////////
+  always @(posedge clk, negedge	rst_n)
+    if (!rst_n)
+	  state <= IDLE;
+	else
+	  state <= nxt_state;
+	  
+  /////////////////////////////////////////////////
+  // SM state transition logic and outputs next //
+  ///////////////////////////////////////////////
+  always_comb begin
+    nxt_state = IDLE;
+	initialize = 0;
+	rst_sclk_div = 0;
+	set_done = 0;
+	shft = 0;
+	smpl = 0;
 	case (state)
-	 FRONT_PORCH : begin
-		if(sclk_div == impending_fall) // Only move to SHIFT upon SCLK falling
-			next_state = SHIFT; 
-	 end
-	 SHIFT : begin
-		if(sclk_div == impending_rise) begin
-			smpl = 1'b1;  // Sample MISO on SCLK rise
-			if(sclk_done) // After 15 SCLK cycles,
-				next_state = BACK_PORCH;
-		end
-		else if (sclk_div == impending_fall)
-			shft = 1'b1; // Shift MOSI and shift register
-	 end
-	 BACK_PORCH : begin
-		if (sclk_div == impending_fall) begin
-			shft = 1'b1;      // Final shift
-			rst_cnt = 1'b1; // Will cause SS_n to be asserted, also keeps SCLK high. Doubles as a set_done signal
-			next_state = IDLE;
-		end
-	 end
-	 default : begin // Default to IDLE state, waits for write signal
-		rst_cnt = 1'b1; // Lock SS_n high
-		if(wrt) begin
-			next_state = FRONT_PORCH;
-			init = 1'b1;
-		end
-	 end
+	  IDLE : begin
+	    if (wrt) begin
+		  initialize = 1;
+		  nxt_state = FRNT_PRCH;
+		end	 
+        rst_sclk_div = 1;			// always reset it in this state
+	  end
+	  FRNT_PRCH : begin
+	    if (SCLK_rise_nxt) begin
+		  smpl = 1;
+		  nxt_state = MAIN;
+		end else
+		  nxt_state = FRNT_PRCH;
+	  end
+	  MAIN : begin
+	    smpl = SCLK_rise_nxt;
+		shft = SCLK_fall_nxt;
+		if (&bit_cnt & SCLK_rise_nxt)
+		  nxt_state = BCK_PRCH;
+		else
+		  nxt_state = MAIN;
+	  end
+	  BCK_PRCH : begin
+	    if (SCLK_fall_nxt) begin
+		  rst_sclk_div = 1;			// freeze sclk_div so SCLK stays 1
+		  set_done = 1;
+		  shft = 1;
+		  nxt_state = IDLE;
+		end else
+		  nxt_state = BCK_PRCH;  
+	  end
 	endcase
   end
-
+	  
 endmodule
+  

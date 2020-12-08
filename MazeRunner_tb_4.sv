@@ -65,13 +65,65 @@ module MazeRunner_tb_4();
 		line_present = 1;
 	endtask
 	
-	task set_cmd;
+	task automatic set_cmd;
 		input arg; // 16 bit hex command vector
 		cmd = arg;
 		wait_clks(2);
 		send_cmd = 1;
 		wait_clks(2);
 		send_cmd = 0;
+	endtask
+	
+	task automatic modify_theta;
+		input int theta;
+
+		// Slowly ramp up line_theta to theta
+		$display("Changing line theta to %d", theta);
+		while( theta != line_theta ) begin
+			// Case: Positive change in theta
+			if(theta > line_theta) begin
+				// Subcase: large change (greater than 25 degrees)
+				if( theta - line_theta > 250)
+					line_theta = line_theta + 250;
+				// Subcase: small change (less than 25 degrees)
+				else
+					line_theta = theta;
+			end
+			
+			// Case: Negative change in theta
+			else begin
+				// Subcase: large change (greater than 25 degrees)
+				if( line_theta - theta > 250)
+					line_theta = line_theta - 250;
+				// Subcase: small change (less than 25 degrees)
+				else 
+					line_theta = theta;
+			end
+			wait_clks(3000000);
+		end
+		
+		$display("Line_theta change complete");	
+	endtask
+	
+	task validate_theta;
+		if(theta_robot < (line_theta - 10) || theta_robot > (line_theta + 10)) begin
+			$display("ERR: theta_robot expected to be near %d, but was %d", line_theta, theta_robot);
+			$stop();
+		end
+		else
+			$display("GOOD: theta_robot matches line_theta with values of %d and %d respectively", theta_robot, line_theta);
+	endtask
+	
+	task automatic modify_and_validate_theta;
+		input int theta;
+		modify_theta(theta);
+		validate_theta;
+	endtask
+	
+	task automatic ramp_up;
+		line_theta = 0;
+		$display("Ramping up to speed for %d clk cycles...", 1500000);
+		wait_clks(1500000);
 	endtask
 	
 	//////////////////////////////////////////////////////////
@@ -81,56 +133,25 @@ module MazeRunner_tb_4();
 	//////////////////////////////////////////////////////////
 	task test_one;
 		$display("Testing veer right command when line is lost, with a change in line_theta");
-		
 		set_cmd(16'h0001);
-		line_theta = 0;
-	  
 		// Wait to get up to speed
-		$display("Ramping up to speed for %d clk cycles...", 1500000);
-		wait_clks(1500000);
-	  
-		// Change line theta
-		line_theta = 150;
-		$display("Changing line theta to %d", line_theta);
-	  
-		// React to change in line theta
-		$display("Changing motor speeds to adjust to line theta difference");
-		wait_clks(3000000);
-	  
+		ramp_up;
+
+		modify_and_validate_theta(150);
+		
 		// Remove line
-		$display("Removing line for %d clk cycles. Induce VEER", 300000);
-		remove_line(300000); 
-		$display("Restore line post VEER.");
-	  
-		// Change line theta
-		line_theta = 250;
-		$display("Changing line theta to %d", line_theta);
-	  
-		// Wait to finish manuever
-		$display("Adjusting to line theta.");
-		wait_clks(4250000);
+		///$display("Removing line for %d clk cycles. Induce VEER", 300000);
+		//remove_line(300000);		
+		//$display("Restore line post VEER.");
 		
-		// Change line theta
-		line_theta = 500;
-		$display("Changing line theta to %d", line_theta);
+		modify_and_validate_theta(250);
+		modify_and_validate_theta(600);
+		modify_and_validate_theta(200);
+		modify_and_validate_theta(-260);
+		modify_and_validate_theta(0);
+		modify_and_validate_theta(-150);
+		modify_and_validate_theta(0);
 		
-		// React to change in line theta
-		$display("Changing motor speeds to adjust to line theta difference");
-		wait_clks(3000000);
-		
-		// Change line theta
-		line_theta = 400;
-		$display("Changing line theta to %d", line_theta);
-		
-		// React to change in line theta
-		$display("Changing motor speeds to adjust to line theta difference");
-		wait_clks(3000000);
-	  
-		// Verify manuever was done correctly
-		if(theta_robot < (line_theta - 10) || theta_robot > (line_theta + 10)) begin
-			$display("ERR: For TEST %d manuever not completed correctly. theta_ robot expected to be near %d, but was %d" , 1, line_theta, theta_robot);
-		end 
-		$stop();
 	endtask
 	
 	/////////////////////////////////////////////////////////////////
@@ -249,8 +270,7 @@ module MazeRunner_tb_4();
 		$stop();
 	endtask
 
-	initial begin
-		// Set up initial conditions
+	task setup;
 		clk = 0;
 		RST_n = 0;
 		send_cmd = 0;
@@ -262,10 +282,20 @@ module MazeRunner_tb_4();
 		
 		RST_n = 1;
 		wait_clks(1);
+	endtask
+
+	integer start_time, end_time;
+	initial begin
+		start_time = $time();
+		// Set up initial conditions
+		setup;
 		
 		test_one;
-		test_two;
-		test_three;
+		//test_two;
+		//test_three;
+		end_time = $time();
+		$display("Total amount of time taken: ", end_time - start_time);
+		$stop();
 	  end
 	
 	always

@@ -65,7 +65,7 @@ assign valid_sum = (!ov && err_vld) ? adder_result : accum_val;
 always_ff @(posedge clk, negedge rst_n)
 	if (!rst_n)
 		accum_val <= 16'h0000;
-	else if (!go || !moving || line_rise) // Any of these signals act as sync resets
+	else if (!go || !moving || line_rise) // Any of these signals act as sync resets. TODO: can probably remove line rise here bc cmd_proc takes care of this?
 		accum_val <= 16'h0000;
 	else
 		accum_val <= valid_sum;
@@ -83,7 +83,7 @@ assign I_term = accum_val[15:6];
 localparam D_COEFF = 7'h38;
 logic signed [10:0] err_sat_1x_old, err_sat_2x_old, D_diff;
 logic signed [7:0] D_diff_sat;
-logic [14:0] D_term;
+logic signed [14:0] D_term;
 
 // Flop to store error from 1 cycle ago
 always_ff @(posedge clk, negedge rst_n)
