@@ -66,7 +66,7 @@ module MazeRunner_tb_4();
 	endtask
 	
 	task set_cmd;
-		input arg; // 16 bit hex command vector
+		input [15:0] arg; // 16 bit hex command vector
 		cmd = arg;
 		wait_clks(2);
 		send_cmd = 1;
