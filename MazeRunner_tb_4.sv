@@ -21,6 +21,7 @@ module MazeRunner_tb_4();
 	// Declare Testing variables							    //
 	/////////////////////////////////////////////////////////////
 
+	parameter FAST_SIM = 1;
 	reg signed [12:0] theta_robot;
 	
 	//get theta_robot from MazePhysics
@@ -62,15 +63,21 @@ module MazeRunner_tb_4();
 		wait_clks(cycl_gone);
 		line_present = 1;
 	endtask
-
-	// Task to test basic veer functionality.
-	task test_one;
-		$display("Testing veer command when line is lost, with a change in line_theta");
-		cmd = 16'h0001;
+	
+	task set_cmd;
+		input arg; // 16 bit hex command vector
+		cmd = arg;
 		wait_clks(2);
 		send_cmd = 1;
 		wait_clks(2);
 		send_cmd = 0;
+	endtask
+
+	// Task to test basic veer functionality. Note: it is bad to change veer by more than 250 (25 degrees), perform changes larger than that in steps.
+	task test_one;
+		$display("Testing veer command when line is lost, with a change in line_theta");
+		
+		set_cmd(16'h0001);
 		line_theta = 0;
 	  
 		// Wait to get up to speed
@@ -83,25 +90,42 @@ module MazeRunner_tb_4();
 	  
 		// React to change in line theta
 		$display("Changing motor speeds to adjust to line theta difference");
-		wait_clks(1500000);
+		wait_clks(3000000);
 	  
 		// Remove line
-		$display("Removing line for %d clk cycles", 300000);
+		$display("Removing line for %d clk cycles. Induce VEER", 300000);
 		remove_line(300000); 
+		$display("Restore line post VEER.");
 	  
 		// Change line theta
-		line_theta = 500;
+		line_theta = 250;
 		$display("Changing line theta to %d", line_theta);
 	  
 		// Wait to finish manuever
-		$display("Finishing maneuver");
-		wait_clks(1250000);
+		$display("Adjusting to line theta.");
+		wait_clks(4250000);
+		
+		// Change line theta
+		line_theta = 500;
+		$display("Changing line theta to %d", line_theta);
+		
+		// React to change in line theta
+		$display("Changing motor speeds to adjust to line theta difference");
+		wait_clks(3000000);
+		
+		// Change line theta
+		line_theta = 400;
+		$display("Changing line theta to %d", line_theta);
+		
+		// React to change in line theta
+		$display("Changing motor speeds to adjust to line theta difference");
+		wait_clks(3000000);
 	  
 		// Verify manuever was done correctly
-		if(theta_robot < (line_theta - 3) || theta_robot > (line_theta + 3)) begin
+		if(theta_robot < (line_theta - 10) || theta_robot > (line_theta + 10)) begin
 			$display("ERR: For TEST %d manuever not completed correctly. theta_ robot expected to be near %d, but was %d" , 1, line_theta, theta_robot);
-			$stop();
 		end 
+		$stop();
 	endtask
 
 	initial begin

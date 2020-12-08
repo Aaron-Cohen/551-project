@@ -13,7 +13,6 @@ reg [17:0] tmr;
 reg IR_R0_en, IR_R1_en, IR_R2_en, IR_R3_en, IR_L0_en, IR_L1_en, IR_L2_en, IR_L3_en;
 
 reg strt_cnv, cnv_cmplt;
-reg set_IR_vld, clr_IR_vld;
 reg set_IR_en, clr_IR_en;
 
 reg [2:0] chnnl;
@@ -23,7 +22,7 @@ reg [11:0] res, high_val;
 
 reg nxt_round, settled;
 
-typedef enum reg [1:0] {IDLE, SETTLE, TRANS} state_t;
+typedef enum reg [1:0] {IDLE, SETTLE, TRANS, CHECK_DONE} state_t;
 state_t state, nextState;  //create states
 
 localparam LINE_THRES = 12'h040; //full synth
@@ -35,12 +34,12 @@ localparam LINE_THRES = 12'h040; //full synth
 //choose normal or fast
 generate
 	if(FAST_SIM == 1) begin
-		assign nxt_round = (tmr & 14'h3fff);
-		assign settled = (tmr & 11'h7ff);
+		assign nxt_round = &tmr[13:0];
+		assign settled = &tmr[10:0];
 	end
 	else begin
-		assign nxt_round = (tmr & 18'h3ffff);
-		assign settled = (tmr &	12'hfff);
+		assign nxt_round = &tmr[17:0];
+		assign settled = &tmr[11:0];
 	end
 endgenerate
 
@@ -140,16 +139,6 @@ always@(posedge clk, negedge rst_n) begin
 		line_present <= high_val>LINE_THRES;
 end
 
-//IR_vld
-always@(posedge clk, negedge rst_n) begin
-	if(!rst_n)
-		IR_vld <=0;		//asynch reset
-	else if(set_IR_vld)
-		IR_vld <= 1;		//when set_IR_vld, IR_vld goes to 1
-	else if(clr_IR_vld)
-		IR_vld <=0;			//when clr_IR_vld, IR_vld goes to 0
-end
-
 //IR_en
 always@(posedge clk, negedge rst_n) begin
 	if(!rst_n)
@@ -191,10 +180,7 @@ always_comb begin
 	IR_L2_en = 0;
 	IR_L3_en = 0;
 	
-	set_IR_vld = 0;
-	clr_IR_vld = 0;
-	
-	set_IR_en = 0;
+	set_IR_en = 1;
 	clr_IR_en = 0;
 	
 	chnnl_inc = 0;
@@ -204,66 +190,54 @@ always_comb begin
 	nextState = state; //initialize nextState to state
 	
 	case (state)
-	
-	IDLE : begin					
-		clr_IR_vld = 1;	//clear IR_vld and IR_en
+	// 4 STATES
+	IDLE : begin	
+		set_IR_en = 0;
+		IR_vld = 0;	//clear IR_vld and IR_en
 		clr_IR_en = 1;
 		if(nxt_round)begin		//on next round go to SETTLE
-			nextState = SETTLE;	//set IR_en to 1
-			set_IR_en = 1;
+			nextState = SETTLE;	
+			chnnl_clr = 1;
 		end
 		end
 	
-	
+	// wait for value to settle due to rc time constant
 	SETTLE : if(settled) begin	//when settled go to TRANS and enable start conversion
-		nextState = TRANS;
-		strt_cnv = 1;
+			strt_cnv = 1;
+			nextState = TRANS;
 		end
-		
-	default : if(cnv_cmplt && (chnnl ==0)) begin //enable the IR reciever for the correct channel, increment the channel and go back to IDLE
-		IR_R0_en = 1;
-		chnnl_inc = 1;
-		nextState = IDLE;
+	CHECK_DONE : begin
+		if(chnnl == 0) begin
+			IR_vld = 1;
+			nextState = IDLE;
 		end
-		else if(cnv_cmplt && (chnnl ==1)) begin
-		IR_R1_en = 1;
-		chnnl_inc = 1;
-		nextState = IDLE;
+		else begin
+			strt_cnv = 1;
+			nextState = TRANS;
 		end
-		else if(cnv_cmplt && (chnnl ==2)) begin
-		IR_R2_en = 1;
-		chnnl_inc = 1;
-		nextState = IDLE;
+	end
+	// wait for cnv_cmplt, then inc channel counter, then go to a state where it checks "are we done, has channel counter wrapped down to 0". If wrap, IR_vld = 1
+	default : 
+		if(cnv_cmplt) begin
+			chnnl_inc = 1;
+			nextState = CHECK_DONE;
+			if(chnnl ==0) //enable the IR reciever for the correct channel, increment the channel and go back to IDLE
+				IR_R0_en = 1;
+			else if(chnnl ==1)
+				IR_R1_en = 1;
+			else if(chnnl ==2)
+				IR_R2_en = 1;
+			else if(chnnl ==3)
+				IR_R3_en = 1;
+			else if(chnnl ==4)
+				IR_L0_en = 1;
+			else if(chnnl ==5)
+				IR_L1_en = 1;
+			else if(chnnl ==6)
+				IR_L2_en = 1;
+			else if(chnnl ==7)
+				IR_L3_en = 1;
 		end
-		else if(cnv_cmplt && (chnnl ==3)) begin
-		IR_R3_en = 1;
-		chnnl_inc = 1;
-		nextState = IDLE;
-		end
-		else if(cnv_cmplt && (chnnl ==4)) begin
-		IR_L0_en = 1;
-		chnnl_inc = 1;
-		nextState = IDLE;
-		end
-		else if(cnv_cmplt && (chnnl ==5)) begin
-		IR_L1_en = 1;
-		chnnl_inc = 1;
-		nextState = IDLE;
-		end
-		else if(cnv_cmplt && (chnnl ==6)) begin
-		IR_L2_en = 1;
-		chnnl_inc = 1;
-		nextState = IDLE;
-		end
-		else if(cnv_cmplt && (chnnl ==7)) begin
-		IR_L3_en = 1;
-		chnnl_clr = 1;
-		set_IR_vld = 1;
-		nextState = IDLE; 
-		end
-		
-		
-		
 		
 	endcase
 	

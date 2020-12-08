@@ -13,25 +13,25 @@ output [15:0] rd_data;  	// Data from SPI slave
 
 
 reg [15:0] shift_register;  // As MOSI shifts out, MISO shifts in
-reg [5:0] sclk_div;			// Increments on clk, every 64 clk cycles, MSB (i.e. sclk) flips
+reg [4:0] sclk_div;			// Increments on clk, every 64 clk cycles, MSB (i.e. sclk) flips
 reg [3:0] sclk_cnt; 		// Keepts track of how many times sclk has been asserted
 reg MISO_smpl;				// MISO sample to be shifted in
 reg sclk_done;				// True when 16 cycles of sclk have occured
 reg smpl, shft, init, rst_cnt; // State machine command signals
 
 // Due to carrying on MSB, these values indicate to SM that SCLK is about to transition
-localparam impending_fall  = 6'b111111;
-localparam impending_rise  = 6'b011111;
+localparam impending_fall  = 5'b11111;
+localparam impending_rise  = 5'b01111;
 
 // SCLK generator
 always_ff @(posedge clk, negedge rst_n)
 	if(!rst_n)
-		sclk_div <= 6'b101111;
+		sclk_div <= 5'b10111;
 	else if(init || rst_cnt) // SYNC reset
-		sclk_div <= 6'b101111; 
+		sclk_div <= 5'b10111; 
 	else
 		sclk_div <= sclk_div + 1'b1;
-assign SCLK = sclk_div[5]; // MSB flips every 64 cycles as lesser significant bits increment
+assign SCLK = sclk_div[4]; // MSB flips every 64 cycles as lesser significant bits increment
 
 // SCLK Cycle (bit) counter
 always_ff @(posedge clk)

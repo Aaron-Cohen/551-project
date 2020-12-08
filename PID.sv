@@ -20,11 +20,11 @@ assign err_sat =
 //  Signals and calculations for P_term  //
 //////////////////////////////////////////
 
-localparam signed [5:0] P_COEFF = 2; 
+localparam P_COEFF = 4'h6; 
 logic signed [16:0] err_product;
 logic signed [14:0] P_term;
 
-assign err_product = err_sat * P_COEFF;
+assign err_product = err_sat * $signed(P_COEFF);
 assign P_term = 
 	err_product[16] && ~&err_product[15:14] ? 15'h4000 	: // If negative and there is a 0 in upper bits, saturate to 100...0
 	!err_product[16] && |err_product[15:14] ? 15'h3FFF 	: // If positive and there is a 1 in upper bits, saturate to 011...1
@@ -80,7 +80,7 @@ assign I_term = accum_val[15:6];
 //  Signals, calculations, flops for D_term  //
 //////////////////////////////////////////////
 
-localparam signed [6:0] D_COEFF = 7'h38;
+localparam D_COEFF = 7'h38;
 logic signed [10:0] err_sat_1x_old, err_sat_2x_old, D_diff;
 logic signed [7:0] D_diff_sat;
 logic [14:0] D_term;
@@ -106,12 +106,12 @@ assign D_diff_sat =
 	!D_diff[10] && |D_diff[10:7] ? 8'h7F : // If positive and there is a 1 in upper bits, saturate to 011...1
 			{D_diff[10], D_diff[6:0]}; // else, do not saturate: tack sign bit to lower 7 bits.	
 
-assign D_term = D_COEFF * D_diff_sat;
+assign D_term = $signed(D_COEFF) * D_diff_sat;
 
 //////////////////////////////////////////////////
 //  Circuitry to put P, I and D terms together //
 ////////////////////////////////////////////////
-parameter FAST_SIM = 0;
+parameter FAST_SIM = 1;
 
 logic [14:0] I_term_extended;
 assign I_term_extended = {{6{I_term[9]}}, I_term[8:0]};
@@ -120,7 +120,7 @@ logic [14:0] PID, PID_reading;
 assign PID = P_term + I_term_extended + D_term;
 
 // Mux after sigma in diagram
-assign PID_reading = go ? PID : 15'h0000;
+assign PID_reading = moving ? PID : 15'h0000;
 
 // Mux on bottom left (not actually synthesized - generated at runtime)
 logic [5:0] increment;
