@@ -75,7 +75,7 @@ module MazeRunner_tb_4();
 
 	// Task to test basic veer functionality. Note: it is bad to change veer by more than 250 (25 degrees), perform changes larger than that in steps.
 	task test_one;
-		$display("Testing veer command when line is lost, with a change in line_theta");
+		$display("Testing veer right command when line is lost, with a change in line_theta");
 		
 		set_cmd(16'h0001);
 		line_theta = 0;
@@ -127,6 +127,61 @@ module MazeRunner_tb_4();
 		end 
 		$stop();
 	endtask
+	
+	// Task to test basic veer left functionality.
+	task test_three;
+		$display("Testing veer left command when line is lost, with a change in line_theta");
+		
+		set_cmd(16'h0002);
+		line_theta = 0;
+	  
+		// Wait to get up to speed
+		$display("Ramping up to speed for %d clk cycles...", 1500000);
+		wait_clks(1500000);
+	  
+		// Change line theta
+		line_theta = -150;
+		$display("Changing line theta to %d", line_theta);
+	  
+		// React to change in line theta
+		$display("Changing motor speeds to adjust to line theta difference");
+		wait_clks(3000000);
+	  
+		// Remove line
+		$display("Removing line for %d clk cycles. Induce VEER", 300000);
+		remove_line(300000); 
+		$display("Restore line post VEER.");
+	  
+		// Change line theta
+		line_theta = -250;
+		$display("Changing line theta to %d", line_theta);
+	  
+		// Wait to finish manuever
+		$display("Adjusting to line theta.");
+		wait_clks(4250000);
+		
+		// Change line theta
+		line_theta = -500;
+		$display("Changing line theta to %d", line_theta);
+		
+		// React to change in line theta
+		$display("Changing motor speeds to adjust to line theta difference");
+		wait_clks(3000000);
+		
+		// Change line theta
+		line_theta = -400;
+		$display("Changing line theta to %d", line_theta);
+		
+		// React to change in line theta
+		$display("Changing motor speeds to adjust to line theta difference");
+		wait_clks(3000000);
+	  
+		// Verify manuever was done correctly
+		if(theta_robot < (line_theta - 10) || theta_robot > (line_theta + 10)) begin
+			$display("ERR: For TEST %d manuever not completed correctly. theta_ robot expected to be near %d, but was %d" , 3, line_theta, theta_robot);
+		end 
+		$stop();
+	endtask
 
 	initial begin
 		// Set up initial conditions
@@ -143,6 +198,8 @@ module MazeRunner_tb_4();
 		wait_clks(1);
 		
 		test_one;
+		
+		test_three;
 	  end
 	
 	always
