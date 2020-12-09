@@ -560,7 +560,7 @@ module MazeRunner_tb_4();
 	initial begin
 		// Set up initial conditions
 		
-		//test_one;
+		test_one;
 		//test_two;
 		//test_three;
 		//test_four;
