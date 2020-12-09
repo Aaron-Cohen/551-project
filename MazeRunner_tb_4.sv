@@ -50,7 +50,7 @@ module MazeRunner_tb_4();
                     .cmd_cmplt(cmd_sent));					  
 		
 
-	/*
+	/**
 		Task to wait a certain amount of clock cycles.
 	*/
 	task automatic wait_clks;
@@ -58,7 +58,7 @@ module MazeRunner_tb_4();
 		repeat (clk_cycl) @(negedge clk);	
 	endtask
 
-	/* 
+	/** 
 		Task that removes the line for a given amount of clk cycles
 	*/
 	task automatic remove_line;
@@ -68,7 +68,7 @@ module MazeRunner_tb_4();
 		line_present = 1;
 	endtask
 	
-	/*
+	/**
 		Task to set the command of MazeRunner
 	*/
 	task automatic set_cmd;
@@ -80,7 +80,7 @@ module MazeRunner_tb_4();
 		send_cmd = 0;
 	endtask
 	
-	/*
+	/**
 		Task to change line_theta "smoothly"
 	*/
 	task automatic modify_theta;
@@ -115,7 +115,7 @@ module MazeRunner_tb_4();
 		end
 	endtask
 	
-	/*
+	/**
 		Task to check if theta_robot is similar to line_theta
 		If close but not similar enough, task will allot more
 		time and check again recursively.
@@ -146,7 +146,7 @@ module MazeRunner_tb_4();
 				passes = passes + 1;
 	endtask
 	
-	/*
+	/**
 		Task to modify and validate theta in one easy step.
 	*/
 	task automatic modify_and_validate_theta;
@@ -155,7 +155,7 @@ module MazeRunner_tb_4();
 		validate_theta;
 	endtask
 	
-	/*
+	/**
 		Task to set up each test fresh. Run before each test task.
 	*/
 	task automatic test_setup;
@@ -179,7 +179,7 @@ module MazeRunner_tb_4();
 		wait_clks(1500000);
 	endtask
 	
-	/*
+	/**
 		Task to print out a summary of passed in test number, and amount of succcesfull subtests.
 	*/
 	task test_results_summary;
