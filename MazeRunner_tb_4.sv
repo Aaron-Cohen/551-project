@@ -428,6 +428,132 @@ module MazeRunner_tb_4();
 		test_results_summary(6); // Do this after each test to get summary.
 	endtask
 	
+	/////////////////////////////////////////////////////////////
+	// Task to test basic obstruction on right functionality. //
+	// Move, hit obstruction, continue to veer right 		 //
+	// after obstruction is moved. 						    //
+	/////////////////////////////////////////////////////////
+	task test_seven;
+		$display("Testing response to obstruction in path");
+		test_setup;
+		set_cmd(16'h0001);
+
+		modify_and_validate_theta(150);
+		
+		//obstruction in path
+		BMPR_n = 0;
+		
+		//wait for obstruction to be cleared
+		wait_clks(300000);
+		$display("Waiting for obstruction to be cleared.");
+		
+		//check if robot stopped
+		if(mtr_lft_pwm !== 0 || mtr_rght_pwm !== 0) begin
+			$display("ERR: For TEST %d manuever not completed correctly. Robot not stopped. " , 4);
+			fails = fails + 1;
+		end
+		else 
+			$display("GOOD: robot stopped at obstruction.");
+			passes = passes + 1;
+		
+		//check if buzzer sounds
+		if(buzz !== 1) begin
+			$display("ERR: buzzer did not sound when obstruction was hit");
+			fails = fails + 1;
+		end
+		else 
+			$display("GOOD: buzzer sounds at obstruction.");
+			passes = passes + 1;
+		
+		//clear obstruction 
+		BMPR_n = 1;
+		
+		//wait to move after obstruction cleared
+		wait_clks(25);
+		
+		//check if buzzer turns off after obstruction
+		if(buzz == 1) begin
+			$display("ERR: buzzer sounds when obstruction is cleared");
+			fails = fails + 1;
+		end
+		else 
+			$display("GOOD: buzzer doesn't sound after obstruction is cleared.");
+			passes = passes + 1;
+	  
+		// Remove line
+		$display("Removing line for %d clk cycles. Induce VEER", 300000);
+		remove_line(300000);		
+		$display("Restore line post VEER.");
+	  
+		
+		modify_and_validate_theta(500);
+		
+		test_results_summary(7);
+	endtask
+	
+	/////////////////////////////////////////////////////////////
+	// Task to test basic obstruction on left functionality. //
+	// Move, hit obstruction, continue to veer left 		 //
+	// after obstruction is moved. 						    //
+	/////////////////////////////////////////////////////////
+	task test_eight;
+		$display("Testing response to obstruction in path");
+		test_setup;
+		set_cmd(16'h0002);
+
+		modify_and_validate_theta(-150);
+		
+		//obstruction in path
+		BMPL_n = 0;
+		
+		//wait for obstruction to be cleared
+		wait_clks(300000);
+		$display("Waiting for obstruction to be cleared.");
+		
+		//check if robot stopped
+		if(mtr_lft_pwm !== 0 || mtr_rght_pwm !== 0) begin
+			$display("ERR: For TEST %d manuever not completed correctly. Robot not stopped. " , 4);
+			fails = fails + 1;
+		end
+		else 
+			$display("GOOD: robot stopped at obstruction.");
+			passes = passes + 1;
+		
+		//check if buzzer sounds
+		if(buzz !== 1) begin
+			$display("ERR: buzzer did not sound when obstruction was hit");
+			fails = fails + 1;
+		end
+		else 
+			$display("GOOD: buzzer sounds at obstruction.");
+			passes = passes + 1;
+		
+		//clear obstruction 
+		BMPL_n = 1;
+		
+		//wait to move after obstruction cleared
+		wait_clks(25);
+		
+		//check if buzzer turns off after obstruction
+		if(buzz == 1) begin
+			$display("ERR: buzzer sounds when obstruction is cleared");
+			fails = fails + 1;
+		end
+		else 
+			$display("GOOD: buzzer doesn't sound after obstruction is cleared.");
+			passes = passes + 1;
+	  
+		// Remove line
+		$display("Removing line for %d clk cycles. Induce VEER", 300000);
+		remove_line(300000);		
+		$display("Restore line post VEER.");
+	  
+		
+		modify_and_validate_theta(-500);
+		
+		test_results_summary(8);
+	endtask
+	
 	
 	integer start_time, end_time;
 	initial begin
@@ -438,7 +564,9 @@ module MazeRunner_tb_4();
 		//test_three;
 		//test_four;
 		//test_five;
-		test_six;
+		//test_six;
+		//test_seven;
+		//test_eight;
 		$stop();
 	  end
 	
