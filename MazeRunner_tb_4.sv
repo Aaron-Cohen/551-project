@@ -27,7 +27,7 @@ module MazeRunner_tb_4();
 	reg mtr_rght_pwm;
 	reg mtr_lft_pwm;
 	
-	typedef enum logic [2:0] {IDLE, MOVE, TURN_90, TURN_270, VEER, COLLISION} states;
+	typedef enum logic [2:0] {IDLE, MOVE, TURN_90, TURN_270, VEER, COLLISION, AWAIT_LINE} states;
 	states state;
 	assign state = states'(iDUT.cmd_proc.state);
 	
@@ -88,7 +88,7 @@ module MazeRunner_tb_4();
 		send_cmd = 0;
 		
 		// Ramp MazeRunner up to speed b/c this command is used right after setup.
-		wait_clks(1500000);
+		wait_clks(750000);
 	endtask
 	
 	/**
@@ -207,12 +207,16 @@ module MazeRunner_tb_4();
 	
 		$display("Test 1: MazeRunner orientation in response to sequence of changes to line_theta");
 		test_setup; // Do this before each test to reset to start conditions
-		set_cmd(16'hAAAA); // Unused, but there must be a non 00 command, otherwise MazeRunner remains in IDLE state.
+		set_cmd(16'h0000); // Unused, but there must be a 00 command, otherwise MazeRunner remains in IDLE state.
 		
 		modify_and_validate_theta(150);
 		modify_and_validate_theta(250);
+		remove_line(250000); // Quick pause to remove integral windup
+		set_cmd(16'h0000);
 		modify_and_validate_theta(600);
 		modify_and_validate_theta(200);
+		remove_line(250000); // Quick pause to remove integral windup
+		set_cmd(16'h0000);
 		modify_and_validate_theta(-260);
 		modify_and_validate_theta(0);
 		modify_and_validate_theta(-150);
@@ -354,20 +358,20 @@ module MazeRunner_tb_4();
 	task automatic test_six;
 		$display("Test 6: MazeRunner orientation in response to sequence of changes to line_theta");
 		test_setup; // Do this before each test to reset to start conditions
+		
 		set_cmd(16'hFFFF); // Load in turn around command 11
-		
-		
 		
 		// Attempts to remove line and continue if the cmd_proc changes state, or it will time out.
 		fork : remove_line_interval
 			// Remove line present
 			begin
+				line_theta 	 = -1800; // Same angle, opposite direction.
 				line_present = 0;
 			end
 			
 			//	Timeout if cmd_roc state not responsive within 1mil clock cycles
 			begin
-				wait_clks(1000000);
+				wait_clks(500000);
 				fails = fails + 1;
 				disable remove_line_interval;
 			end
@@ -382,41 +386,39 @@ module MazeRunner_tb_4();
 			end
 		join : remove_line_interval
 		
-		wait_clks(1000);
-		
-		
 		fork : spin
 			// Timeout
 			begin
-				wait_clks(5000000);
+				wait_clks(50000000);
 				fails = fails + 1;
 				$display("timeout");
 				disable spin;
 			end
-		
-			// Check state, cmd_proc logic has it transition to MOVE state after turning around.
-			begin
-				while(state != MOVE) begin
-					wait_clks(1000);
-				end
-				passes = passes + 1;
-				disable spin;
-			end
 			
-			// Raise line present when theta_robot is back to (line_theta +/- 1800) but do not disable fork/join
+			// Above, line theta was changed to -1800 (same angle, opposite direction). Now, we will be raising line_present
+			// to the robot when it reaches theta = -1800 and observing its behavior after that. Do not disable fork/join
 			// We are basically restoring the line present after the unit has turned 180 degrees to see how it behaves.
 			begin
+				wait_clks(10000);
 				while(!line_present) begin
 					integer difference = line_theta - theta_robot;
 					if(difference < 0)
 						difference = (-1)*difference;
 						
-					line_present = (1750 < difference && difference < 1850);
-					wait_clks(10); // Need a debounce, even if small, or else ModelSim will freeze up
+					line_present = (-50 < difference && difference < 50);
+					wait_clks(100); // Need a debounce, even if small, or else ModelSim will freeze up
 				end
+				passes = passes + 1;
+				disable spin;
 			end
 		join : spin
 		
+		wait_clks(1500000); // Takes a very long time to get exactly right due to overshoot.
+		if(state == MOVE)
+			passes = passes + 1;
+		validate_theta;
+		
+			
 		/*
 			Problem to debug here is that it takes a very long time (about 4505970 clk cycles) for the line_present in cmd_proc to 
 			go high after we raise line_present in test bench. This means it just keeps on spinning on spinning because allthough we are
@@ -554,8 +556,7 @@ module MazeRunner_tb_4();
 		test_results_summary(8);
 	endtask
 	
-	
-	integer start_time, end_time;
+
 	initial begin
 		// Set up initial conditions
 		
@@ -564,7 +565,7 @@ module MazeRunner_tb_4();
 		//test_three;
 		//test_four;
 		//test_five;
-		//test_six;
+		test_six;
 		//test_seven;
 		//test_eight;
 		$stop();

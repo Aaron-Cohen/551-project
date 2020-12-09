@@ -49,8 +49,7 @@ always_ff @(posedge clk, negedge rst_n)
 		
 
 // Determine timing parameters for turning, collision debounce, based on FAST_SIM parameter
-logic [4:0] REV_tmr1, REV_tmr2;
-logic BMP_DBNC_tmr;
+logic REV_tmr1, REV_tmr2, BMP_DBNC_tmr;
 generate
 	if (FAST_SIM) begin
 		// These are >= instead of == so that TURN_270 can wait for line_present to rise across 
@@ -79,7 +78,7 @@ always_ff @(posedge clk, negedge rst_n)
 
 
 // States and State Flop
-typedef enum logic [2:0] {IDLE, MOVE, TURN_90, TURN_270, VEER, COLLISION} states;
+typedef enum logic [2:0] {IDLE, MOVE, TURN_90, TURN_270, VEER, COLLISION, AWAIT_LINE} states;
 states state, next_state;
 always_ff @(posedge clk, negedge rst_n)
 	if(!rst_n)
@@ -98,7 +97,6 @@ always_comb begin
 	enable_buzz = 0;
 	clr_tmr = 0;
 	case (state)
-		// TODO: Add debounce state for collission/buzzer
 		COLLISION : begin
 			enable_buzz = 1;
 			// Returns to move state if neither collision signal is asserted, otherwise will toggle
@@ -113,7 +111,7 @@ always_comb begin
 		end
 		VEER : begin
 			go = 1;
-			err_opn_lp = last_veer_rght ? 16'h340 : -16'h340;
+			err_opn_lp = last_veer_rght ? 16'h340 : -16'h340);
 			if(line_present) begin // VEER state only get moved into when line_present is low, so a high line_present indicates a rise
 				nxt_cmd = 1;
 				next_state = MOVE;
@@ -123,16 +121,20 @@ always_comb begin
 			go = 1;
 			if (!REV_tmr2)
 				err_opn_lp = last_veer_rght ? 16'h380 : -16'h380;
-			else if(line_present) begin // TURN states only get moved into when line_present is low, so a high line_present indicates a rise
-				// err_opn_lp is zeroed out from state machine defaults
-				nxt_cmd = 1;
+			else
+				next_state = AWAIT_LINE;
+		end
+		AWAIT_LINE: begin
+			go = 1;
+			if(line_present) begin  // AWAIT_LINE only gets moved into when line_present is low, so a high line_present indicates a rise
+				nxt_cmd = 1;		// err_opn_lp is zeroed out from state machine defaults
 				next_state = MOVE;
 			end
 		end
 		TURN_90 : begin
 			go = 1;
 			if(!REV_tmr1)
-				err_opn_lp = last_veer_rght ? 16'h1E0 : -16'h1E0;
+				err_opn_lp = last_veer_rght ? -16'h1E0 : 16'h1E0;
 			else begin
 				go = 0;
 				clr_tmr = 1;

@@ -51,7 +51,7 @@ module MazeRunner(clk,RST_n,SS_n,MOSI,MISO,SCLK,PWMR,PWML,
   wire [15:0] err_opn_lp;	// term created by cmd_proc used to steer open loop mode
   wire [15:0] error;		// final error used by PID of line following
   wire signed [11:0] lft_spd,rght_spd;
-  wire bmp_raw;				// combined bump signal (not yet synchronized)
+  wire bmp_raw;				// combined bump signal (not yet synchronized). TODO: what is this for? Sync it up to BMPL_n and BMPR_n maybe? Idk
   
   localparam FAST_SIM = 1;	// enable this when simulating fullchip in ModelSim
   
