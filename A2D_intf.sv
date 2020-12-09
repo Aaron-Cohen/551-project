@@ -50,7 +50,7 @@ module A2D_intf(clk, rst_n, strt_cnv, cnv_cmplt, chnnl, res, SS_n, SCLK, MOSI, M
 	end
 	
 	//state machine
-	always_ff@(posedge clk, negedge rst_n) begin
+	always_comb begin
 		wrt = 0;			//default values to 0
 		clr_hold = 0;
 		set_hold = 0;

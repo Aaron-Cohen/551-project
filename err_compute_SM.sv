@@ -11,18 +11,24 @@ module err_compute_SM(clk, rst_n, IR_vld, sel, clr_accum, en_accum, err_vld);
 	typedef enum reg {IDLE, ACCUM} state_t;  //states IDL and ACCUM
 	state_t state, nxt_state;
 
-	always_comb begin
-	state = nxt_state;  //give state nxt_state
-	sel = cnt[2:0];     //sel is lower 3 bits of cnt
-	end
+	
+	
+	assign sel = cnt[2:0];     //sel is lower 3 bits of cnt
+	
+	
+	always@(posedge clk, negedge rst_n) 
+		if(!rst_n)
+			state <= IDLE;
+		else
+			state <= nxt_state;
 
 	//state machine
-	always_ff@(posedge clk, negedge rst_n) begin
+	always_comb begin
 	  clr_accum = 0;		//initialize to 0 and IDLE default state
 	  en_accum = 0;
 	  err_vld  = 0;
 	  accum = 0;
-	  nxt_state = IDLE;
+	  
 	  case(state)
 		
 		ACCUM : if(cnt == 8) begin	//when cnt is 8 all accumulating is done
@@ -46,7 +52,7 @@ module err_compute_SM(clk, rst_n, IR_vld, sel, clr_accum, en_accum, err_vld);
 	always@(posedge clk, negedge rst_n) begin
 	  if(!rst_n)  //clear cnt on rst_n - asynch
 	  cnt<=0;
-	  if(IR_vld)  //clear cnt on IR_vld - synch
+	  else if(IR_vld)  //clear cnt on IR_vld - synch
 	  cnt<=0;
 	  else if(accum)	//on accum we count up
 	  cnt <= cnt +1;
