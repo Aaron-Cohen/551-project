@@ -21,11 +21,15 @@ module MazeRunner_tb_4();
 	// Declare Testing variables							    //
 	/////////////////////////////////////////////////////////////
 	
-	integer passes, fails, i;
+	integer passes, fails, retry, i;
 	parameter FAST_SIM = 1;
 	reg signed [12:0] theta_robot;
 	reg mtr_rght_pwm;
 	reg mtr_lft_pwm;
+	
+	typedef enum logic [2:0] {IDLE, MOVE, TURN_90, TURN_270, VEER, COLLISION} states;
+	states state;
+	assign state = states'(iDUT.cmd_proc.state);
 	
 	//get theta_robot from MazePhysics
 	assign theta_robot = iPHYS.theta_robot;
@@ -82,6 +86,9 @@ module MazeRunner_tb_4();
 		send_cmd = 1;
 		wait_clks(2);
 		send_cmd = 0;
+		
+		// Ramp MazeRunner up to speed b/c this command is used right after setup.
+		wait_clks(1500000);
 	endtask
 	
 	/**
@@ -137,7 +144,8 @@ module MazeRunner_tb_4();
 				// 
 				// If the test is completely off, we just want to fail, but integral windup in the PID could be responsible
 				// if the term is just outside of the acceptable range so we will take that into account.
-				if (difference < 20) begin
+				if (difference < 20 && retry < 2) begin
+					retry = retry + 1;
 					wait_clks(3500000);
 					validate_theta;
 				end
@@ -171,6 +179,7 @@ module MazeRunner_tb_4();
 		line_present = 1;
 		BMPL_n = 1;
 		BMPR_n = 1;
+		retry  = 0;
 		passes = 0;
 		fails = 0;
 		
@@ -178,9 +187,6 @@ module MazeRunner_tb_4();
 		wait_clks(5);
 		RST_n = 1;
 		wait_clks(1);
-		
-		// Ramp MazeRunner up to speed
-		wait_clks(1500000);
 	endtask
 	
 	/**
@@ -219,6 +225,7 @@ module MazeRunner_tb_4();
 	// Task to test turn around functionality at first gap of line //
 	/////////////////////////////////////////////////////////////////
 	task automatic test_two; // TODO: line_theta value not right, still working on it, though!
+		
 		$display("Testing turn around command at first gap in line");
 		
 		set_cmd(16'h0003);
@@ -319,7 +326,7 @@ module MazeRunner_tb_4();
 	/////////////////////////////////////////////////
 	// Task to test basic stop functionality. //
 	/////////////////////////////////////////////////
-	task test_five;
+	task automatic test_five;
 		$display("Testing stop command when line is lost");
 		test_setup;
 		set_cmd(16'h0000);
@@ -342,15 +349,96 @@ module MazeRunner_tb_4();
 		test_results_summary(5);
 	endtask
 	 
+	
+	// Examines turnaround
+	task automatic test_six;
+		$display("Test 6: MazeRunner orientation in response to sequence of changes to line_theta");
+		test_setup; // Do this before each test to reset to start conditions
+		set_cmd(16'hFFFF); // Load in turn around command 11
+		
+		
+		
+		// Attempts to remove line and continue if the cmd_proc changes state, or it will time out.
+		fork : remove_line_interval
+			// Remove line present
+			begin
+				line_present = 0;
+			end
+			
+			//	Timeout if cmd_roc state not responsive within 1mil clock cycles
+			begin
+				wait_clks(1000000);
+				fails = fails + 1;
+				disable remove_line_interval;
+			end
+			
+			// Monitor cmd_proc state and continue if it changes from MOVE when line removed
+			begin
+				while(state == MOVE) begin
+					wait_clks(1000);
+				end
+				passes = passes + 1;
+				disable remove_line_interval;
+			end
+		join : remove_line_interval
+		
+		wait_clks(1000);
+		
+		
+		fork : spin
+			// Timeout
+			begin
+				wait_clks(5000000);
+				fails = fails + 1;
+				$display("timeout");
+				disable spin;
+			end
+		
+			// Check state, cmd_proc logic has it transition to MOVE state after turning around.
+			begin
+				while(state != MOVE) begin
+					wait_clks(1000);
+				end
+				passes = passes + 1;
+				disable spin;
+			end
+			
+			// Raise line present when theta_robot is back to (line_theta +/- 1800) but do not disable fork/join
+			// We are basically restoring the line present after the unit has turned 180 degrees to see how it behaves.
+			begin
+				while(!line_present) begin
+					integer difference = line_theta - theta_robot;
+					if(difference < 0)
+						difference = (-1)*difference;
+						
+					line_present = (1750 < difference && difference < 1850);
+					wait_clks(10); // Need a debounce, even if small, or else ModelSim will freeze up
+				end
+			end
+		join : spin
+		
+		/*
+			Problem to debug here is that it takes a very long time (about 4505970 clk cycles) for the line_present in cmd_proc to 
+			go high after we raise line_present in test bench. This means it just keeps on spinning on spinning because allthough we are
+			telling it that it found the line, it doesn't get the memo until later and at that point, it has spun so much that we don't 
+			know if it is still on the line.
+		*/
+		
+		
+		test_results_summary(6); // Do this after each test to get summary.
+	endtask
+	
+	
 	integer start_time, end_time;
 	initial begin
 		// Set up initial conditions
 		
-		test_one;
+		//test_one;
 		//test_two;
 		//test_three;
 		//test_four;
 		//test_five;
+		test_six;
 		$stop();
 	  end
 	
