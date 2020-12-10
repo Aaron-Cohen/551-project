@@ -65,12 +65,7 @@ module MazeRunner(clk,RST_n,SS_n,MOSI,MISO,SCLK,PWMR,PWML,
   // Instantiate cmd_proc block to receive & process command byte //
   /////////////////////////////////////////////////////////////////
   cmd_proc #(FAST_SIM) cmd_proc(.clk(clk), .rst_n(rst_n), .BMP_n(BMP_n), .go(go), .err_opn_lp(err_opn_lp), .line_present(line_present), .buzz(buzzer_en), .RX(RX));
-						
-  ////////////////////////////////////////////////////////////
-  // To increase volume of buzzer we drive it differential //
-  //////////////////////////////////////////////////////////  
-  assign buzz_n = ~buzz;
-  
+
   //////////////////////////////////////////////////////
   // Where did you put the mux that selects error to //
   // be err_raw from err_compute vs err_opn_lp?     //
@@ -99,6 +94,10 @@ module MazeRunner(clk,RST_n,SS_n,MOSI,MISO,SCLK,PWMR,PWML,
 		buzz_cnt <= 0;
 	else if (buzzer_en)
 		buzz_cnt <= buzz_cnt + 1;
+  
+  ////////////////////////////////////////////////////////////
+  // To increase volume of buzzer we drive it differential //
+  //////////////////////////////////////////////////////////  
   
    assign buzz = buzz_cnt[14]; // MSB toggles at 1.526 kHz / 2^15
    assign buzz_n = ~buzz;
