@@ -17,7 +17,6 @@ module err_compute_SM(clk, rst_n, IR_vld, sel, clr_accum, en_accum, err_vld);
 		else
 			state <= nxt_state;
 	
-	
 	assign sel = cnt[2:0];     //sel is lower 3 bits of cnt
 	
 	//state machine
@@ -28,7 +27,7 @@ module err_compute_SM(clk, rst_n, IR_vld, sel, clr_accum, en_accum, err_vld);
 	  accum = 0;
 	  nxt_state = state;
 	  case(state)
-		ACCUM : if(cnt == 8) begin	//when cnt is 8 all accumulating is done
+		ACCUM : if(cnt[3]) begin	//when cnt is 8 all accumulating is done
 				  err_vld = 1;		//set err_vld to 1 and IDLE next state
 				  nxt_state = IDLE;
 				end else begin		//otherwise stay in ACCUM state and accum
@@ -36,20 +35,22 @@ module err_compute_SM(clk, rst_n, IR_vld, sel, clr_accum, en_accum, err_vld);
 				  en_accum = 1;
 				  nxt_state = ACCUM;
 				end
-		default : if(IR_vld) begin 		//IDLE default state 
-				nxt_state = ACCUM;  	//when IR_vld nxt_state is ACCUM and clr_accum
-				clr_accum = 1;
+		default : begin
+				if(IR_vld) begin 		//IDLE default state 
+					nxt_state = ACCUM;  	//when IR_vld nxt_state is ACCUM and clr_accum
+					clr_accum = 1;
 				end
+			end
 	  endcase
 	end
 
-	//counter
-	always@(posedge clk, negedge rst_n) begin
+	// Counter
+	always_ff @(posedge clk, negedge rst_n) 
 	  if(!rst_n)  //clear cnt on rst_n - asynch
 	  cnt<=0;
 	  else if(IR_vld)  //clear cnt on IR_vld - synch
 	  cnt<=0;
 	  else if(accum)	//on accum we count up
 	  cnt <= cnt +1;
-	end
+	
 endmodule
