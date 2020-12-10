@@ -10,11 +10,18 @@ output [11:0] lft_spd;		// speed for left side
 output [11:0] right_spd;	// speed for right side
 
 // 11 bit sautrated error reading - used in all three PID calculations
-logic signed [10:0] err_sat;
-assign err_sat = 
+logic signed [10:0] err_sat_preflop;
+assign err_sat_preflop = 
 	error[15]  && ~&error[14:10] ? 11'h400 : // If negative and there is a 0 in upper bits, saturate to 100...0
 	!error[15] && |error[14:10]  ? 11'h3FF : // If positive and there is a 1 in upper bits, saturate to 011...1
 			{error[15], error[9:0]}; // else, do not saturate: tack sign bit to lower 10 bits.		
+
+logic signed [10:0] err_sat;
+always_ff @(posedge clk, negedge rst_n)
+	if(!rst_n)
+		err_sat <= 11'h000;
+	else
+		err_sat <= err_sat_preflop;
 
 ////////////////////////////////////////////
 //  Signals and calculations for P_term  //

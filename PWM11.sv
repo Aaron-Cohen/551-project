@@ -1,4 +1,3 @@
-// Aaron Cohen - 9/28/2020
 module PWM11(
   input clk,
   input rst_n,
@@ -17,11 +16,7 @@ always_ff @(posedge clk, negedge rst_n)
 		PWM_sig <= PWM_pre_flop;
 
 // While count is less than or equal to duty, assert it on. While count is greater than that of duty, deassert.
-always_comb
-	if(cnt <= duty)
-		PWM_pre_flop = 1;
-	else
-		PWM_pre_flop = 0;
+assign PWM_pre_flop = cnt <= duty;
 
 // Increment count with rollover
 always_ff @(posedge clk, negedge rst_n)
@@ -29,6 +24,4 @@ always_ff @(posedge clk, negedge rst_n)
 		cnt <= 10'h000;
 	else
 		cnt <= cnt + 1;
-
-
 endmodule
