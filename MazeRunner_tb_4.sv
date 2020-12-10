@@ -358,12 +358,16 @@ module MazeRunner_tb_4();
 	endtask
 	 
 	
-	// Examines turnaround
+	// Examines turnaround behavior
 	task automatic test_six;
 		$display("Test 6: MazeRunner orientation in response to sequence of changes to line_theta");
-		test_setup; // Do this before each test to reset to start conditions
+		test_setup; // Do this before each test to reset to start condition	
+		set_cmd(16'h0037); // Load in commands: 11 01 11 to turn around, veer right, turn around
 		
-		set_cmd(16'hFFFF); // Load in turn around command 11
+		////////////////////////////////////////////////
+		// Test 6 Part 1							 //
+		// Turning when last_veer_rght is 0 		//
+		/////////////////////////////////////////////
 		
 		// Attempts to remove line and continue if the cmd_proc changes state, or it will time out.
 		fork : remove_line_interval
@@ -427,11 +431,31 @@ module MazeRunner_tb_4();
 		// Veer right to force next turnaround with left 90, right 270 //
 		// back the other way										  //
 		///////////////////////////////////////////////////////////////
-		set_cmd(16'h0001);
-		wait_clks(1000);
 		
-		set_cmd(16'h0003); // set command as turn around
+		if(iDUT.cmd_proc.last_veer_rght == 0)
+			passes = passes + 1;
+		else
+			fails = fails + 1;
 		
+		line_present = 0;
+		wait_clks(1000000);
+		if(state != VEER)
+			fails = fails + 1;
+		else
+			passes = passes + 1;
+		line_present = 1;
+		wait_clks(1000000);
+		
+		if(iDUT.cmd_proc.last_veer_rght == 1)
+			passes = passes + 1;
+		else
+			fails = fails + 1;
+		
+		////////////////////////////////////////////////
+		// Test 6 Part 1							 //
+		// Turning when last_veer_rght is 1			//
+		/////////////////////////////////////////////
+
 		// Attempts to remove line and continue if the cmd_proc changes state, or it will time out.
 		fork : remove_line_interval2
 			// Remove line present
@@ -440,7 +464,7 @@ module MazeRunner_tb_4();
 				line_present = 0;
 			end
 			
-			//	Timeout if cmd_proc state not responsive within 1mil clock cycles
+			// Timeout if cmd_proc state not responsive within 1mil clock cycles
 			begin
 				wait_clks(500000);
 				fails = fails + 1;
@@ -466,8 +490,8 @@ module MazeRunner_tb_4();
 				disable spin2;
 			end
 			
-			// Above, line theta was changed to -1800 (same angle, opposite direction). Now, we will be raising line_present
-			// to the robot when it reaches theta = -1800 and observing its behavior after that. Do not disable fork/join
+			// Above, line theta was changed to from 180 to 0 degrees (same angle, opposite direction). Now, we will be raising line_present
+			// to the robot when it reaches theta = 0 and observing its behavior after that. Do not disable fork/join
 			// We are basically restoring the line present after the unit has turned 180 degrees to see how it behaves.
 			begin
 				wait_clks(10000);
@@ -488,15 +512,6 @@ module MazeRunner_tb_4();
 		if(state == MOVE)
 			passes = passes + 1;
 		validate_theta;
-		
-			
-		/*
-			Problem to debug here is that it takes a very long time (about 4505970 clk cycles) for the line_present in cmd_proc to 
-			go high after we raise line_present in test bench. This means it just keeps on spinning on spinning because allthough we are
-			telling it that it found the line, it doesn't get the memo until later and at that point, it has spun so much that we don't 
-			know if it is still on the line.
-		*/
-		
 		
 		test_results_summary(6); // Do this after each test to get summary.
 	endtask

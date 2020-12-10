@@ -31,7 +31,7 @@ reg last_veer_rght;
 always_ff @(posedge clk, negedge rst_n)
 	if(!rst_n)
 		last_veer_rght <= 0;
-	else if (nxt_cmd)
+	else if (nxt_cmd && ^cmd_reg[1:0])  // Only update on veers to avoid turnaround of 11 from setting 
 		last_veer_rght <= cmd_reg[0]; 	// cmd_reg[1:0] == 01 is right, 10 is left. LSB can be stored on shift
 										// to next command to record whether past command had veered right. 
 
