@@ -24,10 +24,11 @@ module MazeRunner_tb_4();
 	integer passes, fails, retry, i;
 	parameter FAST_SIM = 1;
 	reg signed [12:0] theta_robot;
+	wire signed [11:0] lft_spd,rght_spd;
 	reg mtr_rght_pwm;
 	reg mtr_lft_pwm;
 	
-	typedef enum logic [2:0] {IDLE, MOVE, TURN_90, TURN_270, VEER, COLLISION, AWAIT_LINE} states;
+	typedef enum logic [2:0] {IDLE, MOVE, TURN_90, TURN_270, VEER, COLLISION, AWAIT_LINE, COLLISION_DEBOUNCE} states;
 	states state;
 	assign state = states'(iDUT.cmd_proc.state);
 	
@@ -35,6 +36,8 @@ module MazeRunner_tb_4();
 	assign theta_robot = iPHYS.theta_robot;
 	assign mtr_rght_pwm = iPHYS.iMTRR.PWM_sig;
 	assign mtr_lft_pwm = iPHYS.iMTRL.PWM_sig;
+	assign lft_spd = iDUT.lft_spd;
+	assign rght_spd = iDUT.rght_spd;
 	
     //////////////////////
 	// Instantiate DUT //
@@ -181,6 +184,7 @@ module MazeRunner_tb_4();
 		BMPR_n = 1;
 		retry  = 0;
 		passes = 0;
+		i = 0;
 		fails = 0;
 		
 		// Reset everything
@@ -435,7 +439,7 @@ module MazeRunner_tb_4();
 	// Move, hit obstruction, continue to veer right 		 //
 	// after obstruction is moved. 						    //
 	/////////////////////////////////////////////////////////
-	task test_seven;
+	task automatic test_seven;
 		$display("Testing response to obstruction in path");
 		test_setup;
 		set_cmd(16'h0001);
@@ -445,28 +449,49 @@ module MazeRunner_tb_4();
 		//obstruction in path
 		BMPR_n = 0;
 		
+		// Syncs up with buzzer, counts how long many clks it is positive
+		@(posedge buzz);
+		while(buzz) begin
+			@(posedge clk); // This behavior ensures we only incremenet when buzz is 1. Otherwise we are off-by-one
+			i = i + buzz;   // on the final edge. If statement order swapped, would be off by one from first edge. 			  
+		end
+		
+		// Verify buzzer was up for a total of 2^15 clks (15'h4000 = 2^15)
+		if(i == 15'h4000)
+			passes = passes + 1;
+		else
+			fails = fails + 1;
+			
 		//wait for obstruction to be cleared
+		BMPR_n = 1;
 		wait_clks(300000);
-		$display("Waiting for obstruction to be cleared.");
 		
 		//check if robot stopped
-		if(mtr_lft_pwm !== 0 || mtr_rght_pwm !== 0) begin
-			$display("ERR: For TEST %d manuever not completed correctly. Robot not stopped. " , 4);
+		if(lft_spd > 10 || rght_spd > 10)
 			fails = fails + 1;
-		end
 		else 
-			$display("GOOD: robot stopped at obstruction.");
 			passes = passes + 1;
+		
+		//obstruction in path
+		BMPL_n = 0;
+		
+		//wait for obstruction to be cleared
+		wait_clks(300000);
+		
+		//check if robot stopped
+		if(lft_spd > 10 || rght_spd > 10)
+			fails = fails + 1;
+		else 
+			passes = passes + 1;
+			
+		
 		
 		//check if buzzer sounds
-		if(buzz !== 1) begin
-			$display("ERR: buzzer did not sound when obstruction was hit");
+		if(buzz !== 1)
 			fails = fails + 1;
-		end
 		else 
-			$display("GOOD: buzzer sounds at obstruction.");
 			passes = passes + 1;
-		
+		/*
 		//clear obstruction 
 		BMPR_n = 1;
 		
@@ -486,9 +511,8 @@ module MazeRunner_tb_4();
 		$display("Removing line for %d clk cycles. Induce VEER", 300000);
 		remove_line(300000);		
 		$display("Restore line post VEER.");
-	  
-		
-		modify_and_validate_theta(500);
+	  modify_and_validate_theta(500);
+		*/
 		
 		test_results_summary(7);
 	endtask
@@ -498,7 +522,7 @@ module MazeRunner_tb_4();
 	// Move, hit obstruction, continue to veer left 		 //
 	// after obstruction is moved. 						    //
 	/////////////////////////////////////////////////////////
-	task test_eight;
+	task automatic test_eight;
 		$display("Testing response to obstruction in path");
 		test_setup;
 		set_cmd(16'h0002);
@@ -560,13 +584,13 @@ module MazeRunner_tb_4();
 	initial begin
 		// Set up initial conditions
 		
-		test_one;
+		//test_one;
 		//test_two;
 		//test_three;
 		//test_four;
 		//test_five;
-		test_six;
-		//test_seven;
+		//test_six;
+		test_seven;
 		//test_eight;
 		$stop();
 	  end

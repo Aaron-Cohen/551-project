@@ -1,14 +1,13 @@
-module cmd_proc(clk, rst_n, BMPL_n, BMPR_n, go, err_opn_lp, line_present, buzz, RX);
+module cmd_proc(clk, rst_n, BMP_n, go, err_opn_lp, line_present, buzz, RX);
 
 input clk;				// Operational Clock
 input rst_n;			// Async active low reset
-input BMPL_n;			// Active low bumper left
-input BMPR_n;			// Active low bumper right
+input BMP_n;			// Active low bumpers signal
 input RX;				// Cmd transmission from BLE (?) module
 input line_present;		// Line present from IR_intf
-output reg go;				// Allows FRWRD register to ramp up, is active low reset for I_term
+output reg go;			// Allows FRWRD register to ramp up, is active low reset for I_term
 output reg [15:0] err_opn_lp;		// Error magic number to override IR_intf, induces turn
-output reg buzz;			// Trigger piezo buzzer
+output reg buzz;		// Trigger piezo buzzer timer
 
 parameter FAST_SIM = 1;
 
@@ -52,33 +51,19 @@ always_ff @(posedge clk, negedge rst_n)
 logic REV_tmr1, REV_tmr2, BMP_DBNC_tmr;
 generate
 	if (FAST_SIM) begin
-		// These are >= instead of == so that TURN_270 can wait for line_present to rise across 
-		// multiple cycles if it needs to after the tmr is up.
-		assign REV_tmr1 = (tmr[20:16] >= 5'h0A);
-		assign REV_tmr2 = (tmr[20:16] >= 5'h10);
+		assign REV_tmr1 = (tmr[20:16] == 5'h0A);
+		assign REV_tmr2 = (tmr[20:16] == 5'h10);
 		assign BMP_DBNC_tmr = &tmr[16:0];
 	end
 	else begin
-		assign REV_tmr1 = (tmr[25:21] >= 5'h16);
-		assign REV_tmr2 = (tmr[25:21] >= 5'h1F);
+		assign REV_tmr1 = (tmr[25:21] == 5'h16);
+		assign REV_tmr2 = (tmr[25:21] == 5'h1F);
 		assign BMP_DBNC_tmr = &tmr[21:0];
 	end
 endgenerate
 
-// Allows for toggleable buzz signal without creating latches in state machine
-reg enable_buzz;
-reg toggle_buzz; 
-always_ff @(posedge clk, negedge rst_n)
-	if(!rst_n)
-		buzz <= 0;
-	else if (!enable_buzz) // Only allows toggle behavior when enabled, otherwise zeroes buzz
-		buzz <= 0;
-	else if(toggle_buzz) // Toggle enable signal
-		buzz <= !buzz;
-
-
 // States and State Flop
-typedef enum logic [2:0] {IDLE, MOVE, TURN_90, TURN_270, VEER, COLLISION, AWAIT_LINE} states;
+typedef enum logic [2:0] {IDLE, MOVE, TURN_90, TURN_270, VEER, COLLISION, AWAIT_LINE, COLLISION_DEBOUNCE} states;
 states state, next_state;
 always_ff @(posedge clk, negedge rst_n)
 	if(!rst_n)
@@ -93,25 +78,25 @@ always_comb begin
 	go = 0; 
 	nxt_cmd = 0;
 	err_opn_lp = 0;
-	toggle_buzz = 0;
-	enable_buzz = 0;
+	buzz = 0;
 	clr_tmr = 0;
 	case (state)
+		COLLISION_DEBOUNCE : begin // State will ignore any changes on bumpers
+			buzz = 1;
+			if (BMP_DBNC_tmr)
+				next_state = COLLISION;
+		end
 		COLLISION : begin
-			enable_buzz = 1;
-			// Returns to move state if neither collision signal is asserted, otherwise will toggle
+			// Returns to move state if active low collision signal is not asserted, otherwise will toggle
 			// buzz every 100 miliseconds
-			if(BMPR_n && BMPL_n) begin
+			if(!BMP_n)
+				buzz = 1;
+			else 
 				next_state = MOVE;
-			end
-			else if (BMP_DBNC_tmr) begin
-				clr_tmr = 1;
-				toggle_buzz = 1;
-			end
 		end
 		VEER : begin
 			go = 1;
-			err_opn_lp = last_veer_rght ? 16'h340 : -16'h340);
+			err_opn_lp = last_veer_rght ? 16'h340 : -16'h340;
 			if(line_present) begin // VEER state only get moved into when line_present is low, so a high line_present indicates a rise
 				nxt_cmd = 1;
 				next_state = MOVE;
@@ -146,13 +131,11 @@ always_comb begin
 			// Presence of a line must be exclusively detected first as subsequent logic must
 			// only occur if there is not a line present
 			if(line_present) begin
-				// If either active low bumper is asserted, kickoff collision sequence
-				if(!(BMPR_n && BMPL_n)) begin
+				// If active low bumpers asserted, kickoff collision sequence
+				if(!BMP_n) begin
 					go = 0;
-					enable_buzz = 1;
-					toggle_buzz = 1;
 					clr_tmr = 1;
-					next_state = COLLISION;	
+					next_state = COLLISION_DEBOUNCE;	
 				end
 				// Otherwise, if line present but no collision, remain in move state.
 			end

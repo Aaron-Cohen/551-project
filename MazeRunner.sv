@@ -24,23 +24,6 @@ module MazeRunner(clk,RST_n,SS_n,MOSI,MISO,SCLK,PWMR,PWML,
   // Declare any needed internal signals //
   ////////////////////////////////////////
   wire rst_n;		// global reset signal
- 
-  
-  /*
-  These were included by Hoffman but I am not sure if this is needed.
-	
-  The CMD is sent from CommMaster in the testbench thru the RX channel and picked up by cmd_proc's internal UART wrapper.
-  Basically, cmd is ignored at this level, but is used internally at the cmd_proc level. 
-  
-  And then all the diagrams have a one-way RX line from BLE to our code, no response to BLE. I am thinking send_resp
-  might be a holdover signal from last semester and may not actually be needed
-  
-  wire send_resp;	// initiate sending of response to BLE
-  wire cmd_rdy;		// indicates command ready from BLE
-  wire [7:0] cmd;	// 16-bit command from BLE module
-  wire clr_cmd_rdy;	// knocks down cmd_rdy
-  */
-  
   wire [11:0] IR_R0,IR_R1,IR_R2,IR_R3;
   wire [11:0] IR_L0,IR_L1,IR_L2,IR_L3;
   wire IR_vld;				// asserted for 1 clock when new line_pos valid
@@ -50,8 +33,10 @@ module MazeRunner(clk,RST_n,SS_n,MOSI,MISO,SCLK,PWMR,PWML,
   wire [15:0] err_raw;		// raw error as measured from IR array
   wire [15:0] err_opn_lp;	// term created by cmd_proc used to steer open loop mode
   wire [15:0] error;		// final error used by PID of line following
+  wire buzzer_en;			// buzzer enable from cmd_proc
   wire signed [11:0] lft_spd,rght_spd;
-  wire bmp_raw;				// combined bump signal (not yet synchronized). TODO: what is this for? Sync it up to BMPL_n and BMPR_n maybe? Idk
+  reg [14:0] buzz_cnt;		// Counter for 1.526 kHz Piezo Buzzer tone
+  reg BMP_n;				// combined bump signal 
   
   localparam FAST_SIM = 1;	// enable this when simulating fullchip in ModelSim
   
@@ -79,7 +64,7 @@ module MazeRunner(clk,RST_n,SS_n,MOSI,MISO,SCLK,PWMR,PWML,
   ///////////////////////////////////////////////////////////////////
   // Instantiate cmd_proc block to receive & process command byte //
   /////////////////////////////////////////////////////////////////
-  cmd_proc #(FAST_SIM) cmd_proc(.clk(clk), .rst_n(rst_n), .BMPL_n(BMPL_n), .BMPR_n(BMPR_n), .go(go), .err_opn_lp(err_opn_lp), .line_present(line_present), .buzz(buzz), .RX(RX));
+  cmd_proc #(FAST_SIM) cmd_proc(.clk(clk), .rst_n(rst_n), .BMP_n(BMP_n), .go(go), .err_opn_lp(err_opn_lp), .line_present(line_present), .buzz(buzzer_en), .RX(RX));
 						
   ////////////////////////////////////////////////////////////
   // To increase volume of buzzer we drive it differential //
@@ -97,7 +82,27 @@ module MazeRunner(clk,RST_n,SS_n,MOSI,MISO,SCLK,PWMR,PWML,
   ////////////////////////////////////
   PID #(FAST_SIM) PID(.clk(clk), .rst_n(rst_n), .go(go), .err_vld(err_vld), .line_present(line_present), .error(error), .lft_spd(lft_spd), .right_spd(rght_spd));
 					 
-		   
+  ////////////////////////
+  // Bumper Sync Logic //
+  //////////////////////
+  always_ff @(posedge clk, negedge rst_n) 
+	if(!rst_n)
+		BMP_n <= 1'b1;
+	else
+		BMP_n <= (BMPL_n && BMPR_n);
+		
+  ////////////////////////////
+  // Buzzer Counter Logic ///
+  //////////////////////////
+  always_ff @(posedge clk, negedge rst_n)
+	if(!rst_n)
+		buzz_cnt <= 0;
+	else if (buzzer_en)
+		buzz_cnt <= buzz_cnt + 1;
+  
+   assign buzz = buzz_cnt[14]; // MSB toggles at 1.526 kHz / 2^15
+   assign buzz_n = ~buzz;
+	   
   assign LED = {line_present, line_present, line_present, line_present, line_present, line_present, line_present, line_present};
    
   
