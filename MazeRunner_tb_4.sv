@@ -162,6 +162,24 @@ module MazeRunner_tb_4();
 	endtask
 	
 	/**
+		Task to validate theta after a turn with wider bounds than the validate_theta task
+	*/
+	task automatic validate_turn_theta;
+		integer difference = line_theta - theta_robot;
+		if(difference < 0)
+			difference = difference * (-1);
+		
+		// Takes two long for turn to get within 1 degree due to PID overshoot, but fortunately
+		// it gets within 2 degrees relatively quickly.
+		if(difference > 20) begin
+				$display("ERROR: theta_robot expected to be near %d, but was %d", line_theta, theta_robot);
+				fails = fails + 1;
+		end
+		else
+				passes = passes + 1;
+	endtask
+	
+	/**
 		Task to modify and validate theta in one easy step.
 	*/
 	task automatic modify_and_validate_theta;
@@ -196,7 +214,7 @@ module MazeRunner_tb_4();
 	/**
 		Task to print out a summary of passed in test number, and amount of succcesfull subtests.
 	*/
-	task test_results_summary;
+	task automatic test_results_summary;
 		input int test_number;
 		if(fails == 0 && passes > 0)
 			$display("Good: All %d tests passed for Test: %d", passes, test_number);
@@ -204,9 +222,74 @@ module MazeRunner_tb_4();
 			$display("ERROR: %d tests passed and %d tests failed for Test: %d", passes, fails, test_number);
 	endtask
 	
-	////////////////////////////////////////////////////////
-	// Task to test basic line-following functionalities //
-	//////////////////////////////////////////////////////
+	/**
+		Task to induce a 180 degree turn, takes in input of what theta should be after turn
+		(most likely line_theta +/- 1800). Note that sign is very important.
+	*/
+	task automatic test_roundabout;
+		input int new_theta;
+		// Attempts to remove line and continue if the cmd_proc changes state, or it will time out.
+		fork : remove_line_interval
+			// Remove line present
+			begin
+				line_theta 	 = new_theta; // Same angle, opposite direction.
+				line_present = 0;
+			end
+			
+			//	Timeout if cmd_roc state not responsive within 1mil clock cycles
+			begin
+				wait_clks(500000);
+				fails = fails + 1;
+				disable remove_line_interval;
+			end
+			
+			// Monitor cmd_proc state and continue if it changes from MOVE when line removed
+			begin
+				while(state == MOVE) begin
+					wait_clks(1000);
+				end
+				passes = passes + 1;
+				disable remove_line_interval;
+			end
+		join : remove_line_interval
+		
+		fork : spin
+			// Timeout
+			begin
+				wait_clks(50000000);
+				fails = fails + 1;
+				$display("timeout");
+				disable spin;
+			end
+			
+			// Above, line theta was changed to -1800 (same angle, opposite direction). Now, we will be raising line_present
+			// to the robot when it reaches theta = -1800 and observing its behavior after that. Do not disable fork/join
+			// We are basically restoring the line present after the unit has turned 180 degrees to see how it behaves.
+			begin
+				wait_clks(10000);
+				while(!line_present) begin
+					integer difference = line_theta - theta_robot;
+					if(difference < 0)
+						difference = (-1)*difference;
+						
+					line_present = (-50 < difference && difference < 50);
+					wait_clks(100); // Need a debounce, even if small, or else ModelSim will freeze up
+				end
+				passes = passes + 1;
+				disable spin;
+			end
+		join : spin
+		
+		wait_clks(1500000); 
+		if(state == MOVE)
+			passes = passes + 1;
+		validate_turn_theta;
+		wait_clks(1000000); // For easy debugging, lengthens waveform.
+	endtask
+	
+	/**
+		Task to test basic line following capabilities on a curvy track.
+	*/
 	task automatic test_one;
 	
 		$display("Test 1: MazeRunner orientation in response to sequence of changes to line_theta");
@@ -229,9 +312,9 @@ module MazeRunner_tb_4();
 		test_results_summary(1); // Do this after each test to get summary.
 	endtask
 	
-	//////////////////////////////////////////////////////////////////
-	// Task to test turn around functionality at first gap of line //
-	////////////////////////////////////////////////////////////////
+	/**
+		Task to test turn around functionality at first gap of line
+	*/
 	task automatic test_two; // TODO: line_theta value not right, still working on it, though!
 		
 		$display("Testing turn around command at first gap in line");
@@ -289,9 +372,9 @@ module MazeRunner_tb_4();
 		$stop();
 	endtask
 	
-	//////////////////////////////////////////////////
-	// Task to test basic veer left functionality. //
-	////////////////////////////////////////////////
+	/*
+		Task to test basic veer left functionality.
+	*/
 	task automatic test_three;
 	
 		$display("Test 3: Testing veer left command when line is lost, with a change in line_theta");
@@ -310,9 +393,9 @@ module MazeRunner_tb_4();
 		test_results_summary(3);
 	 endtask 
 	 
-	///////////////////////////////////////////////////
-	// Task to test basic veer right functionality. //
-	/////////////////////////////////////////////////
+    /**
+		Task to test basic veer right functionality.
+	*/
 	task automatic test_four;
 	
 		$display("Test 4: Testing veer right command when line is lost, with a change in line_theta");
@@ -331,9 +414,9 @@ module MazeRunner_tb_4();
 		test_results_summary(4);
 	endtask 
 	
-	/////////////////////////////////////////////
-	// Task to test basic stop functionality. //
-	///////////////////////////////////////////
+	/**
+		 Task to test basic stop functionality
+	*/
 	task automatic test_five;
 		$display("Testing stop command when line is lost");
 		test_setup;
@@ -356,75 +439,34 @@ module MazeRunner_tb_4();
 		$display("GOOD: Robot stopped");
 		test_results_summary(5);
 	endtask
-	 
 	
-	// Examines turnaround behavior
+	/**
+		Rigourous test of turning around functionality.
+	*/
 	task automatic test_six;
 		$display("Test 6: MazeRunner orientation in response to sequence of changes to line_theta");
-		test_setup; // Do this before each test to reset to start condition	
-		set_cmd(16'h0037); // Load in commands: 11 01 11 to turn around, veer right, turn around
+		test_setup; // Do this before each test to reset to start condition
+		
+		///////////////////////////////////////////////////////////////////////////
+		// Test 6: 																//
+		// Sequence of events goes:											   //
+		// turn around (last veer defaults to left), veer right,			  //
+		// turn around (last veer = right), turn around (last veer = right), //
+		// veer left, turn around (last veer = left)						//
+		/////////////////////////////////////////////////////////////////////
+		
+		
+		// Order of commands: 11, 01, 11, 11, 10, 11 === 111011110111 = EF7
+		
+		
+		set_cmd(16'h0EF7);
 		
 		////////////////////////////////////////////////
 		// Test 6 Part 1							 //
 		// Turning when last_veer_rght is 0 		//
 		/////////////////////////////////////////////
 		
-		// Attempts to remove line and continue if the cmd_proc changes state, or it will time out.
-		fork : remove_line_interval
-			// Remove line present
-			begin
-				line_theta 	 = -1800; // Same angle, opposite direction.
-				line_present = 0;
-			end
-			
-			//	Timeout if cmd_roc state not responsive within 1mil clock cycles
-			begin
-				wait_clks(500000);
-				fails = fails + 1;
-				disable remove_line_interval;
-			end
-			
-			// Monitor cmd_proc state and continue if it changes from MOVE when line removed
-			begin
-				while(state == MOVE) begin
-					wait_clks(1000);
-				end
-				passes = passes + 1;
-				disable remove_line_interval;
-			end
-		join : remove_line_interval
-		
-		fork : spin
-			// Timeout
-			begin
-				wait_clks(50000000);
-				fails = fails + 1;
-				$display("timeout");
-				disable spin;
-			end
-			
-			// Above, line theta was changed to -1800 (same angle, opposite direction). Now, we will be raising line_present
-			// to the robot when it reaches theta = -1800 and observing its behavior after that. Do not disable fork/join
-			// We are basically restoring the line present after the unit has turned 180 degrees to see how it behaves.
-			begin
-				wait_clks(10000);
-				while(!line_present) begin
-					integer difference = line_theta - theta_robot;
-					if(difference < 0)
-						difference = (-1)*difference;
-						
-					line_present = (-50 < difference && difference < 50);
-					wait_clks(100); // Need a debounce, even if small, or else ModelSim will freeze up
-				end
-				passes = passes + 1;
-				disable spin;
-			end
-		join : spin
-		
-		wait_clks(1500000); // Takes a very long time to get exactly right due to overshoot.
-		if(state == MOVE)
-			passes = passes + 1;
-		validate_theta;
+		test_roundabout(-1800); // Angle is of same magnitude, but opposite direction
 		
 		///////////////////////////////////////////////////////////////////
 		// Test 6 Part 2											    //
@@ -438,82 +480,68 @@ module MazeRunner_tb_4();
 			fails = fails + 1;
 		
 		line_present = 0;
-		wait_clks(1000000);
+		wait_clks(500000); // Be careful not to veer too far otherwise MazePhysics theta_robot can overflow
 		if(state != VEER)
 			fails = fails + 1;
 		else
 			passes = passes + 1;
+			
 		line_present = 1;
 		wait_clks(1000000);
+		if(iDUT.cmd_proc.last_veer_rght == 1)
+			passes = passes + 1;
+		else
+			fails = fails + 1;
+								
+								
+		////////////////////////////////////////////////
+		// Test 6 Part 3							 //
+		// Turning when last_veer_rght is 1			//
+		/////////////////////////////////////////////
+
+		test_roundabout(0);
+		
+		/////////////////////////////////////////////////////
+		// Test 6 Part 4							      //
+		// Turning again, should go same direction		 //
+		// without a VEER in between turns 				//
+		/////////////////////////////////////////////////
+
+		test_roundabout(1800);
+		
+		///////////////////////////////////////////////////////////////////
+		// Test 6 Part 5											    //
+		// Veer left to force next turnaround to go other direction    //
+		////////////////////////////////////////////////////////////////
 		
 		if(iDUT.cmd_proc.last_veer_rght == 1)
 			passes = passes + 1;
 		else
 			fails = fails + 1;
 		
-		////////////////////////////////////////////////
-		// Test 6 Part 1							 //
-		// Turning when last_veer_rght is 1			//
-		/////////////////////////////////////////////
-
-		// Attempts to remove line and continue if the cmd_proc changes state, or it will time out.
-		fork : remove_line_interval2
-			// Remove line present
-			begin
-				line_theta 	 = 0; // Same angle, opposite direction.
-				line_present = 0;
-			end
-			
-			// Timeout if cmd_proc state not responsive within 1mil clock cycles
-			begin
-				wait_clks(500000);
-				fails = fails + 1;
-				disable remove_line_interval2;
-			end
-			
-			// Monitor cmd_proc state and continue if it changes from MOVE when line removed
-			begin
-				while(state == MOVE) begin
-					wait_clks(1000);
-				end
-				passes = passes + 1;
-				disable remove_line_interval2;
-			end
-		join : remove_line_interval2
-		
-		fork : spin2
-			// Timeout
-			begin
-				wait_clks(50000000);
-				fails = fails + 1;
-				$display("timeout");
-				disable spin2;
-			end
-			
-			// Above, line theta was changed to from 180 to 0 degrees (same angle, opposite direction). Now, we will be raising line_present
-			// to the robot when it reaches theta = 0 and observing its behavior after that. Do not disable fork/join
-			// We are basically restoring the line present after the unit has turned 180 degrees to see how it behaves.
-			begin
-				wait_clks(10000);
-				while(!line_present) begin
-					integer difference = line_theta - theta_robot;
-					if(difference < 0)
-						difference = (-1)*difference;
-						
-					line_present = (-50 < difference && difference < 50);
-					wait_clks(100); // Need a debounce, even if small, or else ModelSim will freeze up
-				end
-				passes = passes + 1;
-				disable spin2;
-			end
-		join : spin2
-		
-		wait_clks(1500000); // Takes a very long time to get exactly right due to overshoot.
-		if(state == MOVE)
+		line_present = 0;
+		wait_clks(500000); // Be careful not to veer too far otherwise MazePhysics theta_robot can overflow
+		if(state != VEER)
+			fails = fails + 1;
+		else
 			passes = passes + 1;
-		validate_theta;
 		
-		test_results_summary(6); // Do this after each test to get summary.
+		line_present = 1;
+		wait_clks(1000000);
+		if(iDUT.cmd_proc.last_veer_rght == 0)
+			passes = passes + 1;
+		else
+			fails = fails + 1;
+		
+		/////////////////////////////////////////////////
+		// Test 6 Part 3							  //
+		// Turning when last_veer_rght set back to 0 //
+		//////////////////////////////////////////////
+		
+		test_roundabout(0);
+		
+		test_results_summary(6); 
+		
 	endtask
 	
 	/////////////////////////////////////////////////////////////

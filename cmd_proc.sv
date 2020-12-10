@@ -98,8 +98,8 @@ always_comb begin
 			go = 1;
 			err_opn_lp = last_veer_rght ? 16'h340 : -16'h340;
 			if(line_present) begin // VEER state only get moved into when line_present is low, so a high line_present indicates a rise
-				nxt_cmd = 1;
 				next_state = MOVE;
+				nxt_cmd = 1;
 			end
 		end
 		TURN_270: begin
