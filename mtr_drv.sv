@@ -21,8 +21,8 @@ module mtr_drv(clk, rst_n, lft_duty, rght_duty, DIRL, DIRR, PWML, PWMR);
 	PWM11 rghtPWM(.clk(clk), .rst_n(rst_n), .duty(rght_duty_mag), .PWM_sig(PWMR));	
 	
 	//Assign direction output signals
-	assign DIRL = lft_duty[11];
-	assign DIRR = rght_duty[11];		
+	assign DIRL = lft_duty_ff[11];
+	assign DIRR = rght_duty_ff[11];		
 	
 endmodule
 	  
