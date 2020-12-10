@@ -175,7 +175,7 @@ module MazeRunner_tb_4();
 		
 		// Takes two long for turn to get within 1 degree due to PID overshoot, but fortunately
 		// it gets within 2 degrees relatively quickly.
-		if(difference > 20) begin
+		if(difference > 25) begin
 				$display("ERROR: theta_robot expected to be near %d, but was %d", line_theta, theta_robot);
 				fails = fails + 1;
 		end
@@ -326,71 +326,11 @@ module MazeRunner_tb_4();
 	endtask
 	
 	/**
-		Task to test turn around functionality at first gap of line
-	*/
-	task automatic test_two; // TODO: line_theta value not right, still working on it, though!
-		
-		$display("Testing turn around command at first gap in line");
-		
-		set_cmd(16'h0003);
-		line_theta = 0;
-	  
-		// Wait to get up to speed
-		$display("Ramping up to speed for %d clk cycles...", 1500000);
-		wait_clks(1500000);
-	  
-		// Change line theta
-		line_theta = 150;
-		$display("Changing line theta to %d", line_theta);
-	  
-		// React to change in line theta
-		$display("Changing motor speeds to adjust to line theta difference");
-		wait_clks(3000000);
-		
-		// 2.5mil clocks, first gap is encountered, robot starts turn around maneuver
-		$display("Wait 2.5 mil clocks for first gap, robot then starts turn around maneuver");
-		wait_clks(2500000);
-		line_present = 0;
-		
-		// Gradually increase line_theta via loop to begin veer to right
-		$display("Gradually change line theta to %d", line_theta);
-		for (i = 0; i < 1050; i = i + 1) begin
-			line_theta = line_theta + 1;
-			wait_clks(10);
-		end
-		
-		// Encounters line again at 1.75mil clocks
-		wait_clks(1750000);
-		line_present = 1;
-		
-		// Gradually decrease line_theta via loop to finish turn around
-		$display("Gradually change line theta to %d", line_theta);
-		for (i = 0; i < 2700; i = i + 1) begin
-			line_theta = line_theta - 1;
-			wait_clks(10);
-		end
-		
-		// End, line is 180 degrees from 15 degree when it started maneuver
-		// line_theta = -1650;
-		$display("Changing line theta to %d", line_theta);
-		
-		// React to change in line theta
-		$display("Changing motor speeds to adjust to line theta difference");
-		wait_clks(3000000);
-	  
-		// Verify manuever was done correctly
-		if(theta_robot < (line_theta - 10) || theta_robot > (line_theta + 10)) begin
-			$display("ERR: For TEST %d manuever not completed correctly. theta_ robot expected to be near %d, but was %d" , 2, line_theta, theta_robot);
-		end 
-		$stop();
-	endtask
-	
-	/**
 		Task to test basic veer left functionality.
 	*/
-	task automatic test_three;
+	task automatic test_two;
 	
-		$display("Test 3: Testing veer left command when line is lost, with a change in line_theta");
+		$display("Test 2: Testing veer left command when line is lost, with a change in line_theta");
 		test_setup;
 		set_cmd(16'h0002); // cmd: 10 to veer left when line is removed
 		
@@ -414,15 +354,15 @@ module MazeRunner_tb_4();
 		wait_clks(1500000);
 		validate_theta;
 		
-		test_results_summary(3);
+		test_results_summary(2);
 	 endtask 
 	 
     /**
 		Task to test basic veer right functionality.
 	*/
-	task automatic test_four;
+	task automatic test_three;
 	
-		$display("Test 4: Testing veer right command when line is lost, with a change in line_theta");
+		$display("Test 3: Testing veer right command when line is lost, with a change in line_theta");
 		test_setup;
 		set_cmd(16'h0001); // cmd: 01 to veer right when line is removed
 		
@@ -446,15 +386,15 @@ module MazeRunner_tb_4();
 		wait_clks(1500000);
 		validate_theta;
 		
-		test_results_summary(4);
+		test_results_summary(3);
 	 endtask 
 	
 	/**
 		 Task to test basic stop/start functionality
 		 due to cmd stimulus
 	*/
-	task automatic test_five;
-		$display("Test 5: Testing robot idles when line is lost and command is 00");
+	task automatic test_four;
+		$display("Test 4: Testing robot idles when line is lost and command is 00");
 		test_setup;
 		set_cmd(16'hFCFC); // Making sure lower two bits and only lower two bits get read (on both bytes)
 	  
@@ -490,15 +430,15 @@ module MazeRunner_tb_4();
 		else 
 			passes = passes + 1;
 		
-		test_results_summary(5);
+		test_results_summary(4);
 	endtask
 	
 	/**
 		Rigourous test of turning around functionality, testing the reverse
 		maneuver in succession with different states of its last veer.
 	*/
-	task automatic test_six;
-		$display("Test 6: MazeRunner orientation in response to sequence of changes to line_theta");
+	task automatic test_five;
+		$display("Test 5: MazeRunner orientation in response to sequence of changes to line_theta");
 		test_setup;
 		
 		///////////////////////////////////////////////////////////////////////////
@@ -592,7 +532,7 @@ module MazeRunner_tb_4();
 		
 		test_roundabout(0);
 		
-		test_results_summary(6); 
+		test_results_summary(5); 
 		
 	endtask
 	
@@ -600,8 +540,8 @@ module MazeRunner_tb_4();
 		Task to test basic obstruction functionality,
 		buzzer, and movement
 	*/
-	task automatic test_seven;
-		$display("Test 7: MazeRunner motion in response to obstructions in path");
+	task automatic test_six;
+		$display("Test 6: MazeRunner motion in response to obstructions in path");
 		test_setup;
 		set_cmd(16'h0000);
 		
@@ -765,7 +705,7 @@ module MazeRunner_tb_4();
 		else
 			passes = passes + 1;
 		
-		test_results_summary(7);
+		test_results_summary(6);
 	endtask
 	
 	initial begin
@@ -773,12 +713,11 @@ module MazeRunner_tb_4();
 		total_fails  = 0;
 		
 		test_one;	// Test line following as line_theta changes
-		// test_two;	// Turnaround test by changing line_theta (?)
-		test_three;	// Veer left test
-		test_four;	// Veer right test
-		test_five;	// Halt test
-		test_six;	// Turnaround maneuver test
-		test_seven; // Bumper collission and buzzer test
+		test_two;	// Veer left test
+		test_three;	// Veer right test
+		test_four;	// Halt test
+		test_five;	// Turnaround maneuver test
+		test_six;	// Bumper collission and buzzer test
 		
 		// Looks messy, prints nice.
 		$display("\n#################################");
