@@ -126,7 +126,7 @@ module MazeRunner_tb_4();
 				else 
 					line_theta = theta;
 			end
-			wait_clks(1500000);
+			wait_clks(1750000);
 		end
 	endtask
 	
@@ -156,10 +156,13 @@ module MazeRunner_tb_4();
 				else begin
 					$display("ERROR: theta_robot expected to be near %d, but was %d", line_theta, theta_robot);
 					fails = fails + 1;
+					retry = 0;
 				end
 		end
-		else
+		else begin
 				passes = passes + 1;
+				retry = 0;
+		end
 	endtask
 	
 	/**
@@ -186,6 +189,7 @@ module MazeRunner_tb_4();
 	task automatic modify_and_validate_theta;
 		input int theta;
 		modify_theta(theta);
+		wait_clks(150000);
 		validate_theta;
 	endtask
 	
@@ -197,7 +201,7 @@ module MazeRunner_tb_4();
 		clk = 0;
 		RST_n = 0;
 		send_cmd = 0;
-		line_theta = 0; 
+		line_theta = 0;
 		line_present = 1;
 		BMPL_n = 1;
 		BMPR_n = 1;
@@ -207,9 +211,12 @@ module MazeRunner_tb_4();
 		fails = 0;
 		
 		// Reset everything
-		wait_clks(5);
+		wait_clks(500);
 		RST_n = 1;
-		wait_clks(1);
+		
+		// Wait for maze physics to recalibrate after previous test to about 0 before beginning next test
+		while(theta_robot < -10 || theta_robot > 10)
+			wait_clks(5000);
 	endtask
 	
 	/**
@@ -387,7 +394,7 @@ module MazeRunner_tb_4();
 		test_setup;
 		set_cmd(16'h0002); // cmd: 10 to veer left when line is removed
 		
-		modify_and_validate_theta(-150);
+		modify_theta(-150);
 		
 		// Remove line to go to veer state
 		line_present = 0;
@@ -400,7 +407,7 @@ module MazeRunner_tb_4();
 		end
 		else
 			passes = passes + 1;
-		wait_clks(250000);
+		wait_clks(100000);
 		
 		// Restore line, wait, and see if theta is correct after a while
 		line_present = 1;
@@ -419,7 +426,7 @@ module MazeRunner_tb_4();
 		test_setup;
 		set_cmd(16'h0001); // cmd: 01 to veer right when line is removed
 		
-		modify_and_validate_theta(-150);
+		modify_theta(-150);
 		
 		// Remove line to go to veer state
 		line_present = 0;
@@ -432,7 +439,7 @@ module MazeRunner_tb_4();
 		end
 		else
 			passes = passes + 1;
-		wait_clks(250000);
+		wait_clks(100000);
 		
 		// Restore line, wait, and see if theta is correct after a while
 		line_present = 1;
@@ -594,7 +601,7 @@ module MazeRunner_tb_4();
 		buzzer, and movement
 	*/
 	task automatic test_seven;
-		$display("Test 7: MazeRunner orientation in response to sequence of changes to line_theta");
+		$display("Test 7: MazeRunner motion in response to obstructions in path");
 		test_setup;
 		set_cmd(16'h0000);
 		
@@ -766,7 +773,7 @@ module MazeRunner_tb_4();
 		total_fails  = 0;
 		
 		test_one;	// Test line following as line_theta changes
-		//test_two;	// Turnaround test by changing line_theta (?)
+		// test_two;	// Turnaround test by changing line_theta (?)
 		test_three;	// Veer left test
 		test_four;	// Veer right test
 		test_five;	// Halt test
