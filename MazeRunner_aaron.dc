@@ -1,0 +1,45 @@
+##################
+#READ FILE#####
+##############
+read_file -format sverilog {./MazeRunner.sv ./rst_synch.sv ./IR_Intf.sv ./A2D_intf.sv ./SPI_mstr16.sv ./err_compute.sv ./err_compute_DP.sv ./err_compute_SM.sv ./PID.sv ./cmd_proc.sv ./UART_wrapper.sv ./UART_rcv.sv ./UART_tx.sv ./UART.v ./mtr_drv.sv ./PWM11.sv}
+
+##set current design
+set current_design MazeRunner
+
+##create clock and set dont touch
+create_clock -name "clk" -period 2.857  -waveform {0 1.4285} {clk}
+set_dont_touch_network [find port clk]
+
+##create collection without clk and without clk
+set prim_inputs [remove_from_collection [all_inputs] [find port clk]]
+
+##set input delay and set drive strength
+set_input_delay -clock clk .5 [copy_collection $prim_inputs]
+set_driving_cell -lib_cell NAND2X2_RVT  -library saed32rvt_tt0p85v25c [copy_collection $prim_inputs]
+
+##set output delay
+set_output_delay -clock clk .5 [all_outputs]
+
+##defines load on outputs
+set_load 0.1 [all_outputs]
+
+##set max transition time
+set_max_transition 0.15 [current_design]
+
+##emplys the synopsys 32 nm wire load model for a block of size 16000 sq microns
+set_wire_load_model -name 16000 -library saed32rvt_tt0p85v25c
+
+##compile flatten and compile
+compile -map_effort high
+ungroup -all -flatten
+compile -map_effort high
+
+##report timing delay max, min, and report area
+report_timing -delay max > max_timing_report.txt
+report_timing -delay min > min_timing_report.txt
+report_area > area_report.txt
+
+
+##writes out the gate level verilog netlist and SDC file
+write -format verilog MazeRunner -output MazeRunner.vg
+write_sdc MazeRunner.sdc

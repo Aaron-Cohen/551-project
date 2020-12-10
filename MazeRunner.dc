@@ -1,46 +1,62 @@
 ##################
 #READ FILE#####
 ##############
-read_file -format sverilog {./MazeRunner.sv ./rst_synch.sv ./IR_intf.sv ./A2D_intf.sv ./SPI_mstr16.sv ./err_compute.sv ./err_compute_DP.sv ./err_compute_SM.sv ./PID.sv ./I_term.sv ./D_term.sv ./cmd_proc.sv ./UART_wrapper.sv ./UART_rcv.sv ./UART_tx.sv ./UART.v ./mtr_drv.sv ./PWM11.sv}
+read_file -format sverilog {./MazeRunner.sv ./rst_synch.sv ./IR_Intf.sv ./A2D_intf.sv ./SPI_mstr16.sv ./err_compute.sv ./err_compute_DP.sv ./err_compute_SM.sv ./PID.sv ./cmd_proc.sv ./UART_wrapper.sv ./UART_rcv.sv ./UART_tx.sv ./UART.v ./mtr_drv.sv ./PWM11.sv}
 
 ##set current design
 set current_design MazeRunner
 
 ##create clock and set dont touch
-create_clock -name "clk" -period 350 -waveform {0 250} {clk}
+create_clock -name "clk" -period 2.857 -waveform {0 1.429} {clk}
+#Performs a set don’t touch on the clock network
+######################################################################
 set_dont_touch_network [find port clk]
 
-##create collection without clk and without clk and rst_n
+#set prim_inputs will everything except clock##########################################
 set prim_inputs [remove_from_collection [all_inputs] [find port clk]]
-set prim_in_no_rst [remove_from_collection [copy_collection $prim_inputs] [find port rst_n]]
 
-##set input delay and set drive strength
-set_input_delay -clock clk .5 [copy_collection $prim_inputs]
-set_driving_cell -lib_cell NAND2X2_RVT  -library saed32rvt_tt0p85v25c [copy_collection $prim_in_no_rst]
 
-##set output delay
-set_output_delay -clock clk .5 [all_outputs]
 
-##defines load on outputs
+#set input delay for prim inputs##########################################################
+set_input_delay -clock clk 0.5 $prim_inputs
+
+set driving_inputs [remove_from_collection [copy_collection $prim_inputs] [find port rst_n]]
+
+#set drive strength#########################################################################
+set_driving_cell -lib_cell NAND2X2_RVT -library saed32rvt_tt0p85v25c $driving_inputs
+
+#Defines an output delay of 0.5ns on all outputs.#############################################################
+set_output_delay -clock clk 0.5 [all_outputs]
+
+#Defines a 0.1pf load on all outputs.
+##################################################################
 set_load 0.1 [all_outputs]
 
-##set max transition time
+#Sets a max transition time of 0.15ns on all nodes
+##################################################################
 set_max_transition 0.15 [current_design]
 
-##emplys the synopsys 32 nm wire load model for a block of size 16000 sq microns
+# Employs the Synopsys 32nm wire load model for a block of size 16000 sq microns
+##################################################################
 set_wire_load_model -name 16000 -library saed32rvt_tt0p85v25c
 
-##compile flatten and compile
+#Compiles, then flattens the design so it has no hierarchy, and compiles again.
+##################################################################
 compile -map_effort high
-ungroup –all -flatten
+ungroup -all -flatten
 compile -map_effort high
 
-##report timing delay max, min, and report area
-report_timing -delay max
-report_timing -delay min
-report_area
 
+#Produces a min_delay & max delay report
+##################################################################
+report_timing -delay max > min_delay.rpt
+report_timing -delay min > max_delay.rpt
 
-##writes out the gate level verilog netlist and SDC file
+#Produces an area report
+##################################################################
+report_area > MazeRunner_area.txt
+
+#Writes out the gate level verilog netlist (err_compute.vg)
+##################################################################
+ungroup -all -flatten
 write -format verilog MazeRunner -output MazeRunner.vg
-write_sdc MazeRunner.sdc
