@@ -204,9 +204,9 @@ module MazeRunner_tb_4();
 			$display("ERROR: %d tests passed and %d tests failed for Test: %d", passes, fails, test_number);
 	endtask
 	
-	//////////////////////////////////////////////////////////
-	// Task to test basic line-following functionalities	//
-	//////////////////////////////////////////////////////////
+	////////////////////////////////////////////////////////
+	// Task to test basic line-following functionalities //
+	//////////////////////////////////////////////////////
 	task automatic test_one;
 	
 		$display("Test 1: MazeRunner orientation in response to sequence of changes to line_theta");
@@ -229,9 +229,9 @@ module MazeRunner_tb_4();
 		test_results_summary(1); // Do this after each test to get summary.
 	endtask
 	
-	/////////////////////////////////////////////////////////////////
+	//////////////////////////////////////////////////////////////////
 	// Task to test turn around functionality at first gap of line //
-	/////////////////////////////////////////////////////////////////
+	////////////////////////////////////////////////////////////////
 	task automatic test_two; // TODO: line_theta value not right, still working on it, though!
 		
 		$display("Testing turn around command at first gap in line");
@@ -289,9 +289,9 @@ module MazeRunner_tb_4();
 		$stop();
 	endtask
 	
-	/////////////////////////////////////////////////
+	//////////////////////////////////////////////////
 	// Task to test basic veer left functionality. //
-	/////////////////////////////////////////////////
+	////////////////////////////////////////////////
 	task automatic test_three;
 	
 		$display("Test 3: Testing veer left command when line is lost, with a change in line_theta");
@@ -310,7 +310,7 @@ module MazeRunner_tb_4();
 		test_results_summary(3);
 	 endtask 
 	 
-	/////////////////////////////////////////////////
+	///////////////////////////////////////////////////
 	// Task to test basic veer right functionality. //
 	/////////////////////////////////////////////////
 	task automatic test_four;
@@ -331,9 +331,9 @@ module MazeRunner_tb_4();
 		test_results_summary(4);
 	endtask 
 	
-	/////////////////////////////////////////////////
+	/////////////////////////////////////////////
 	// Task to test basic stop functionality. //
-	/////////////////////////////////////////////////
+	///////////////////////////////////////////
 	task automatic test_five;
 		$display("Testing stop command when line is lost");
 		test_setup;
@@ -416,6 +416,73 @@ module MazeRunner_tb_4();
 				disable spin;
 			end
 		join : spin
+		
+		wait_clks(1500000); // Takes a very long time to get exactly right due to overshoot.
+		if(state == MOVE)
+			passes = passes + 1;
+		validate_theta;
+		
+		///////////////////////////////////////////////////////////////////
+		// Test 6 Part 2											    //
+		// Veer right to force next turnaround with left 90, right 270 //
+		// back the other way										  //
+		///////////////////////////////////////////////////////////////
+		set_cmd(16'h0001);
+		wait_clks(1000);
+		
+		set_cmd(16'h0003); // set command as turn around
+		
+		// Attempts to remove line and continue if the cmd_proc changes state, or it will time out.
+		fork : remove_line_interval2
+			// Remove line present
+			begin
+				line_theta 	 = 0; // Same angle, opposite direction.
+				line_present = 0;
+			end
+			
+			//	Timeout if cmd_proc state not responsive within 1mil clock cycles
+			begin
+				wait_clks(500000);
+				fails = fails + 1;
+				disable remove_line_interval2;
+			end
+			
+			// Monitor cmd_proc state and continue if it changes from MOVE when line removed
+			begin
+				while(state == MOVE) begin
+					wait_clks(1000);
+				end
+				passes = passes + 1;
+				disable remove_line_interval2;
+			end
+		join : remove_line_interval2
+		
+		fork : spin2
+			// Timeout
+			begin
+				wait_clks(50000000);
+				fails = fails + 1;
+				$display("timeout");
+				disable spin2;
+			end
+			
+			// Above, line theta was changed to -1800 (same angle, opposite direction). Now, we will be raising line_present
+			// to the robot when it reaches theta = -1800 and observing its behavior after that. Do not disable fork/join
+			// We are basically restoring the line present after the unit has turned 180 degrees to see how it behaves.
+			begin
+				wait_clks(10000);
+				while(!line_present) begin
+					integer difference = line_theta - theta_robot;
+					if(difference < 0)
+						difference = (-1)*difference;
+						
+					line_present = (-50 < difference && difference < 50);
+					wait_clks(100); // Need a debounce, even if small, or else ModelSim will freeze up
+				end
+				passes = passes + 1;
+				disable spin2;
+			end
+		join : spin2
 		
 		wait_clks(1500000); // Takes a very long time to get exactly right due to overshoot.
 		if(state == MOVE)
@@ -518,7 +585,7 @@ module MazeRunner_tb_4();
 	endtask
 	
 	/////////////////////////////////////////////////////////////
-	// Task to test basic obstruction on left functionality. //
+	// Task to test basic obstruction on left functionality.  //
 	// Move, hit obstruction, continue to veer left 		 //
 	// after obstruction is moved. 						    //
 	/////////////////////////////////////////////////////////
@@ -589,8 +656,8 @@ module MazeRunner_tb_4();
 		//test_three;
 		//test_four;
 		//test_five;
-		//test_six;
-		test_seven;
+		test_six;
+		// test_seven;
 		//test_eight;
 		$stop();
 	  end
