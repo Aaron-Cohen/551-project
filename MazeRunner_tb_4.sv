@@ -25,20 +25,18 @@ module MazeRunner_tb_4();
 	integer retry, i;	// Integers used in testing for retry logic, and misc number holders
 	parameter FAST_SIM = 1;
 	reg signed [12:0] theta_robot;
-	wire signed [11:0] lft_spd,rght_spd;
-	reg mtr_rght_pwm;
-	reg mtr_lft_pwm;
-	
-	typedef enum logic [2:0] {IDLE, MOVE, TURN_90, TURN_270, VEER, COLLISION, AWAIT_LINE, COLLISION_DEBOUNCE} states;
-	states state;
-	assign state = states'(iDUT.cmd_proc.state);
+	wire [10:0] mtr_rght_spd, mtr_lft_spd;
+	wire signed [12:0] alpha_lft,alpha_rght;			// angular acceleration of wheels
+	wire signed [15:0] omega_lft,omega_rght;			// angular velocities of wheels
 	
 	// Get internal signals from MazePhysics and iDUT
 	assign theta_robot = iPHYS.theta_robot;
-	assign mtr_rght_pwm = iPHYS.iMTRR.PWM_sig;
-	assign mtr_lft_pwm = iPHYS.iMTRL.PWM_sig;
-	assign lft_spd = iDUT.lft_spd;
-	assign rght_spd = iDUT.rght_spd;
+	assign mtr_rght_spd = iPHYS.mtrMagR;
+	assign mtr_lft_spd = iPHYS.mtrMagL;
+	assign omega_lft = iPHYS.omega_lft;
+	assign omega_rght = iPHYS.omega_rght;
+	assign alpha_lft = iPHYS.alpha_lft;
+	assign alpha_rght = iPHYS.omega_rght;
 	
     //////////////////////
 	// Instantiate DUT //
@@ -60,7 +58,150 @@ module MazeRunner_tb_4();
 	///////////////////////////
 	CommMaster iMST(.clk(clk), .rst_n(RST_n), .TX(RX_TX), .snd_cmd(send_cmd), .cmd(cmd),
                     .cmd_cmplt(cmd_sent));					  
+	
+	
+	
+	/////////////////////////////////////////
+	// Section: Validation tasks to check //
+	// common conditions in testbench 	 //
+	//////////////////////////////////////
+	
+	/**
+		Task to validate right veer
+	*/
+	task automatic validate_veer_right;
+		// When veering right, left wheel spinning much faster than right wheel
+		if (omega_lft - omega_rght > 100)
+			passes = passes + 1;
+		else
+			fails = fails + 1;
+	endtask
+
+	/**
+		Task to verify 100ms debounce does not react to bumper status changes
+	*/
+	task automatic validate_debounce;
+		logic left_orig  = BMPL_n;
+		logic right_orig = BMPR_n;
 		
+		wait_clks(30000); // Motor drive needs time to get memo to stop
+		validate_robot_is_stopped;
+		
+		// Deassert bump signal for 75000 clk cycles (still shorter than debounce timer)
+		// to bait it into restarting if it is not in the debounce wait period
+		BMPL_n = 1;
+		BMPR_n = 1;
+		wait_clks(30000);
+		
+		// See if robot took the bait after motor has sufficient time to get going.
+		validate_robot_is_stopped;
+		
+		// Set bumpers back to whatever their original values were
+		BMPL_n = left_orig;
+		BMPR_n = right_orig;		
+	endtask
+
+	/**
+		Task to validate left veer
+	*/
+	task automatic validate_veer_left;
+		// When veering left, left wheel spinning much slower than right wheel
+		if (omega_rght - omega_lft > 100)
+			passes = passes + 1;
+		else
+			fails = fails + 1;
+	endtask
+
+	/**
+		Task to check if theta_robot is similar to line_theta
+		If close but not similar enough, task will allot more
+		time and check again recursively.
+	*/
+	task automatic validate_theta;
+		integer difference = line_theta - theta_robot;
+		if(difference < 0)
+			difference = difference * (-1);
+		
+		if(difference > 10) begin
+				// Two possible scenarios if the first validation check fails: the theta was completely off, or perhaps
+				// the theta was just outside the barrier and needs more time to get within the acceptable range. For
+				// the latter, we give it more time to fall in the acceptable 1 degree range, and then recursively
+				// validate it again.
+				// 
+				// If the test is completely off, we just want to fail, but integral windup in the PID could be responsible
+				// if the term is just outside of the acceptable range so we will take that into account.
+				if (difference < 20 && retry < 2) begin
+					retry = retry + 1;
+					wait_clks(3500000);
+					validate_theta;
+				end
+				else begin
+					$display("ERROR: theta_robot expected to be near %d, but was %d", line_theta, theta_robot);
+					fails = fails + 1;
+					retry = 0;
+				end
+		end
+		else begin
+				passes = passes + 1;
+				retry = 0;
+		end
+	endtask
+
+	/**
+		Task to validate theta after a turn with wider bounds than the validate_theta task
+	*/
+	task automatic validate_turn_theta;
+		integer difference = line_theta - theta_robot;
+		if(difference < 0)
+			difference = difference * (-1);
+		
+		// Takes two long for turn to get within 1 degree due to PID overshoot, but fortunately
+		// it gets within 2 degrees relatively quickly.
+		if(difference > 25) begin
+				$display("ERROR: theta_robot expected to be near %d, but was %d", line_theta, theta_robot);
+				fails = fails + 1;
+		end
+		else
+				passes = passes + 1;
+	endtask
+
+	/**
+		Task to examin robot's angular velocities of each wheel to 
+	*/
+	task automatic validate_robot_is_stopped;
+		if( mtr_lft_spd > 1 || mtr_rght_spd > 1)
+			fails = fails + 1;
+		else
+			passes = passes + 1;
+	endtask
+
+	/**
+		Task to examine if robot is in MOVE  steady state
+	*/
+	task automatic valiate_move_state;
+		fork : loop
+			// When robot is in move state, sum of mtr drives are 1538 in steady state
+			begin
+				while(mtr_lft_spd + mtr_rght_spd != 1538) begin
+					wait_clks(500);
+				end
+				passes = passes + 1;
+				disable loop;
+			end
+		
+			// Timeout loop
+			begin 
+				wait_clks(2500000);
+				fails = fails + 1;
+				disable loop;
+			end
+		join: loop
+	endtask
+	
+	///////////////////////////////////////////////////
+	// Section: Helper tasks for commonly occuring	//
+	// operations.								   //
+	////////////////////////////////////////////////
 
 	/**
 		Task to wait a certain amount of clock cycles.
@@ -131,59 +272,6 @@ module MazeRunner_tb_4();
 	endtask
 	
 	/**
-		Task to check if theta_robot is similar to line_theta
-		If close but not similar enough, task will allot more
-		time and check again recursively.
-	*/
-	task automatic validate_theta;
-		integer difference = line_theta - theta_robot;
-		if(difference < 0)
-			difference = difference * (-1);
-		
-		if(difference > 10) begin
-				// Two possible scenarios if the first validation check fails: the theta was completely off, or perhaps
-				// the theta was just outside the barrier and needs more time to get within the acceptable range. For
-				// the latter, we give it more time to fall in the acceptable 1 degree range, and then recursively
-				// validate it again.
-				// 
-				// If the test is completely off, we just want to fail, but integral windup in the PID could be responsible
-				// if the term is just outside of the acceptable range so we will take that into account.
-				if (difference < 20 && retry < 2) begin
-					retry = retry + 1;
-					wait_clks(3500000);
-					validate_theta;
-				end
-				else begin
-					$display("ERROR: theta_robot expected to be near %d, but was %d", line_theta, theta_robot);
-					fails = fails + 1;
-					retry = 0;
-				end
-		end
-		else begin
-				passes = passes + 1;
-				retry = 0;
-		end
-	endtask
-	
-	/**
-		Task to validate theta after a turn with wider bounds than the validate_theta task
-	*/
-	task automatic validate_turn_theta;
-		integer difference = line_theta - theta_robot;
-		if(difference < 0)
-			difference = difference * (-1);
-		
-		// Takes two long for turn to get within 1 degree due to PID overshoot, but fortunately
-		// it gets within 2 degrees relatively quickly.
-		if(difference > 25) begin
-				$display("ERROR: theta_robot expected to be near %d, but was %d", line_theta, theta_robot);
-				fails = fails + 1;
-		end
-		else
-				passes = passes + 1;
-	endtask
-	
-	/**
 		Task to modify and validate theta in one easy step.
 	*/
 	task automatic modify_and_validate_theta;
@@ -241,30 +329,9 @@ module MazeRunner_tb_4();
 	*/
 	task automatic test_roundabout;
 		input int new_theta;
-		// Attempts to remove line and continue if the cmd_proc changes state, or it will time out.
-		fork : remove_line_interval
-			// Remove line present
-			begin
-				line_theta 	 = new_theta; // Same angle, opposite direction.
-				line_present = 0;
-			end
-			
-			//	Timeout if cmd_roc state not responsive within 1mil clock cycles
-			begin
-				wait_clks(500000);
-				fails = fails + 1;
-				disable remove_line_interval;
-			end
-			
-			// Monitor cmd_proc state and continue if it changes from MOVE when line removed
-			begin
-				while(state == MOVE) begin
-					wait_clks(1000);
-				end
-				passes = passes + 1;
-				disable remove_line_interval;
-			end
-		join : remove_line_interval
+		
+		line_present = 0;
+		line_theta 	 = new_theta; // Should be same angle, opposite direction.
 		
 		fork : spin
 			// Timeout
@@ -294,11 +361,15 @@ module MazeRunner_tb_4();
 		join : spin
 		
 		wait_clks(1500000); 
-		if(state == MOVE)
-			passes = passes + 1;
+		valiate_move_state;
 		validate_turn_theta;
 		wait_clks(1000000); // For easy debugging, lengthens waveform.
 	endtask
+
+	///////////////////////////////////////////////////
+	// Section: The actual unit tests themselves to	//
+	// execute within the initial block			   //
+	////////////////////////////////////////////////
 	
 	/**
 		Task to test basic line following capabilities on a curvy track.
@@ -341,12 +412,8 @@ module MazeRunner_tb_4();
 		wait_clks(100000);
 		
 		// Check that robot is veering
-		if(state != VEER) begin
-			fails = fails + 1;
-			$display("ERROR: Robot not in VEER state after line removed.");
-		end
-		else
-			passes = passes + 1;
+		validate_veer_left;
+
 		wait_clks(100000);
 		
 		// Restore line, wait, and see if theta is correct after a while
@@ -373,12 +440,8 @@ module MazeRunner_tb_4();
 		wait_clks(100000);
 		
 		// Check that robot is veering
-		if(state != VEER) begin
-			fails = fails + 1;
-			$display("ERROR: Robot not in VEER state after line removed.");
-		end
-		else
-			passes = passes + 1;
+		validate_veer_right;
+		
 		wait_clks(100000);
 		
 		// Restore line, wait, and see if theta is correct after a while
@@ -404,10 +467,7 @@ module MazeRunner_tb_4();
 		
 		// Check if robot stops driving PWM speed. Robot from a physics standpoint still in motion
 		// but motor not being driven indicates an eventual stop for testing purposes.
-		if(lft_spd != 0 || rght_spd != 0)
-			fails = fails + 1;
-		else 
-			passes = passes + 1;
+		validate_robot_is_stopped;
 		
 		// Add line to go again
 		line_present = 1;
@@ -415,20 +475,17 @@ module MazeRunner_tb_4();
 		wait_clks(100000);
 		
 		// Check in motion
-		if(lft_spd == 0 || rght_spd == 0)
-			fails = fails + 1;
-		else 
-			passes = passes + 1;
+		//if(lft_spd == 0 || rght_spd == 0)
+		//	fails = fails + 1;
+	//	else 
+		//	passes = passes + 1;
 		
 		// Remove line
 		line_present = 0;
 		wait_clks(100000);
 		
 		// Check if stops again
-		if(lft_spd != 0 || rght_spd != 0)
-			fails = fails + 1;
-		else 
-			passes = passes + 1;
+		validate_robot_is_stopped;
 		
 		test_results_summary(4);
 	endtask
@@ -466,25 +523,13 @@ module MazeRunner_tb_4();
 		// back the other way										  //
 		///////////////////////////////////////////////////////////////
 		
-		if(iDUT.cmd_proc.last_veer_rght == 0)
-			passes = passes + 1;
-		else
-			fails = fails + 1;
-		
 		line_present = 0;
 		wait_clks(500000); // Be careful not to veer too far otherwise MazePhysics theta_robot can overflow
-		if(state != VEER)
-			fails = fails + 1;
-		else
-			passes = passes + 1;
+		validate_veer_right;
 			
 		line_present = 1;
 		wait_clks(1000000);
-		if(iDUT.cmd_proc.last_veer_rght == 1)
-			passes = passes + 1;
-		else
-			fails = fails + 1;
-								
+									
 								
 		////////////////////////////////////////////////
 		// Test 6 Part 3							 //
@@ -506,24 +551,12 @@ module MazeRunner_tb_4();
 		// Veer left to force next turnaround to go other direction    //
 		////////////////////////////////////////////////////////////////
 		
-		if(iDUT.cmd_proc.last_veer_rght == 1)
-			passes = passes + 1;
-		else
-			fails = fails + 1;
-		
 		line_present = 0;
 		wait_clks(500000); // Be careful not to veer too far otherwise MazePhysics theta_robot can overflow
-		if(state != VEER)
-			fails = fails + 1;
-		else
-			passes = passes + 1;
+		validate_veer_left;
 		
 		line_present = 1;
 		wait_clks(1000000);
-		if(iDUT.cmd_proc.last_veer_rght == 0)
-			passes = passes + 1;
-		else
-			fails = fails + 1;
 		
 		/////////////////////////////////////////////////
 		// Test 6 Part 3							  //
@@ -541,7 +574,7 @@ module MazeRunner_tb_4();
 		buzzer, and movement
 	*/
 	task automatic test_six;
-		$display("Test 6: MazeRunner motion in response to obstructions in path");
+		$display("Test 6: MazeRunner motion and buzzer in response to obstructions in path");
 		test_setup;
 		set_cmd(16'h0000);
 		
@@ -553,10 +586,7 @@ module MazeRunner_tb_4();
 		wait_clks(5);
 		
 		// Check debounce state entrance
-		if(state != COLLISION_DEBOUNCE)
-			fails = fails + 1;
-		else
-			passes = passes + 1;
+		validate_debounce;
 		
 		// Sync up with buzzer, counts how long many clks it is positive
 		@(posedge buzz);
@@ -572,18 +602,10 @@ module MazeRunner_tb_4();
 			fails = fails + 1;
 		
 		wait_clks(500000);
-		// By now, state should be out of COLLISION_DEBOUNCE into COLLISION
-		if(state != COLLISION)
-			fails = fails + 1;
-		else
-			passes = passes + 1;
 		
 		// Check if robot stops driving PWM speed. Robot from a physics standpoint still in motion
 		// but motor not being driven indicates an eventual stop for testing purposes.
-		if(lft_spd != 0 || rght_spd != 0)
-			fails = fails + 1;
-		else 
-			passes = passes + 1;
+		validate_robot_is_stopped;
 		
 		wait_clks(100000);
 		
@@ -591,11 +613,8 @@ module MazeRunner_tb_4();
 		BMPR_n = 1;
 		wait_clks(300000);
 		
-		// Verify robot is moving after encountering instruction
-		if(state != MOVE)
-			fails = fails + 1;
-		else
-			passes = passes + 1;
+		// Verify robot is moving after obstruction removed
+		valiate_move_state;
 			
 		//////////////////////////////////////////////
 		// Test 7 Part 2: Left Bumper Obstruction  //
@@ -606,10 +625,7 @@ module MazeRunner_tb_4();
 		wait_clks(5);
 		
 		// Check debounce state entrance
-		if(state != COLLISION_DEBOUNCE)
-			fails = fails + 1;
-		else
-			passes = passes + 1;
+		validate_debounce;
 		
 		// Sync up with buzzer, counts how long many clks it is positive
 		@(posedge buzz);
@@ -625,18 +641,10 @@ module MazeRunner_tb_4();
 			fails = fails + 1;
 		
 		wait_clks(500000);
-		// By now, state should be out of COLLISION_DEBOUNCE into COLLISION
-		if(state != COLLISION)
-			fails = fails + 1;
-		else
-			passes = passes + 1;
 		
 		// Check if robot stops driving PWM speed. Robot from a physics standpoint still in motion
 		// but motor not being driven indicates an eventual stop for testing purposes.
-		if(lft_spd != 0 || rght_spd != 0)
-			fails = fails + 1;
-		else 
-			passes = passes + 1;
+		validate_robot_is_stopped;
 		
 		wait_clks(100000);
 		
@@ -644,11 +652,8 @@ module MazeRunner_tb_4();
 		BMPL_n = 1;
 		wait_clks(300000);
 		
-		// Verify robot is moving after encountering instruction
-		if(state != MOVE)
-			fails = fails + 1;
-		else
-			passes = passes + 1;
+		// Verify robot is moving after obstruction removed
+		valiate_move_state;
 			
 		////////////////////////////////////////////////
 		// Test 7 Part 3: Boths Bumpers Obstructions //
@@ -660,10 +665,7 @@ module MazeRunner_tb_4();
 		wait_clks(5);
 		
 		// Check debounce state entrance
-		if(state != COLLISION_DEBOUNCE)
-			fails = fails + 1;
-		else
-			passes = passes + 1;
+		validate_debounce;
 		
 		// Sync up with buzzer, counts how long many clks it is positive
 		@(posedge buzz);
@@ -679,18 +681,10 @@ module MazeRunner_tb_4();
 			fails = fails + 1;
 		
 		wait_clks(500000);
-		// By now, state should be out of COLLISION_DEBOUNCE into COLLISION
-		if(state != COLLISION)
-			fails = fails + 1;
-		else
-			passes = passes + 1;
 		
 		// Check if robot stops driving PWM speed. Robot from a physics standpoint still in motion
 		// but motor not being driven indicates an eventual stop for testing purposes.
-		if(lft_spd != 0 || rght_spd != 0)
-			fails = fails + 1;
-		else 
-			passes = passes + 1;
+		validate_robot_is_stopped;
 		
 		wait_clks(100000);
 		
@@ -699,11 +693,8 @@ module MazeRunner_tb_4();
 		BMPL_n = 1;
 		wait_clks(300000);
 		
-		// Verify robot is moving after encountering instruction
-		if(state != MOVE)
-			fails = fails + 1;
-		else
-			passes = passes + 1;
+		// Verify robot is moving after encountering obstruction removed
+		valiate_move_state;
 		
 		test_results_summary(6);
 	endtask
