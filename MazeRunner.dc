@@ -8,36 +8,33 @@ set current_design MazeRunner
 
 ##create clock and set dont touch
 create_clock -name "clk" -period 2.857 -waveform {0 1.429} {clk}
-#Performs a set don’t touch on the clock network
+#Performs a set donâ€™t touch on the clock network
 ######################################################################
 set_dont_touch_network [find port clk]
 
-#set prim_inputs will everything except clock##########################################
+#set prim_inputs will everything except clock
 set prim_inputs [remove_from_collection [all_inputs] [find port clk]]
 
 
 
-#set input delay for prim inputs##########################################################
+#set input delay for prim inputs
 set_input_delay -clock clk 0.5 $prim_inputs
 
 set driving_inputs [remove_from_collection [copy_collection $prim_inputs] [find port rst_n]]
 
-#set drive strength#########################################################################
+#set drive strength
 set_driving_cell -lib_cell NAND2X2_RVT -library saed32rvt_tt0p85v25c $driving_inputs
 
-#Defines an output delay of 0.5ns on all outputs.#############################################################
+#Defines an output delay of 0.5ns on all outputs.
 set_output_delay -clock clk 0.5 [all_outputs]
 
 #Defines a 0.1pf load on all outputs.
-##################################################################
 set_load 0.1 [all_outputs]
 
 #Sets a max transition time of 0.15ns on all nodes
-##################################################################
 set_max_transition 0.15 [current_design]
 
 # Employs the Synopsys 32nm wire load model for a block of size 16000 sq microns
-##################################################################
 set_wire_load_model -name 16000 -library saed32rvt_tt0p85v25c
 
 #Compiles, then flattens the design so it has no hierarchy, and compiles again.
