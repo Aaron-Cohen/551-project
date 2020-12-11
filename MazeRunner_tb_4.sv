@@ -1,3 +1,4 @@
+`timescale 1ns/10ps
 module MazeRunner_tb_4();
 
 	reg clk,RST_n;					// Clk and async reset signal
