@@ -11,9 +11,10 @@ module err_compute_DP(clk,en_accum,clr_accum,sub,sel,IR_R0,IR_R1,IR_R2,IR_R3,
   
   output reg signed [15:0] error;	// Error in line following, goes to PID
   
-  reg signed [15:0] next_error;
+  reg signed [15:0] next_error, error_ff, next_IR_ff;
   reg signed [15:0] next_IR;
-  reg signed [15:0] intermediate;
+  reg signed [15:0] intermediate, intermediate_ff;
+  reg sub_ff;
   
   // Cascasing MSB selecting
   assign intermediate = sel[2]? (sel[1]?(sel[0]? {1'b0, IR_L3, 3'h0}:	//111
@@ -24,9 +25,9 @@ module err_compute_DP(clk,en_accum,clr_accum,sub,sel,IR_R0,IR_R1,IR_R2,IR_R3,
 												{3'h0, IR_R1, 1'b0}):	//010
 											  (sel[0]? {4'h0, IR_L0}:	//001
 													 {4'h0, IR_R0}));	//000
-	assign next_IR = sub? -intermediate: intermediate;
+	assign next_IR = sub_ff ? -intermediate_ff: intermediate_ff;
 
-	assign next_error = $signed(error) + $signed(next_IR);
+	assign next_error = $signed(error_ff) + $signed(next_IR_ff);
   
   //////////////////////////////////
   //           Error accumulator //
@@ -36,5 +37,15 @@ module err_compute_DP(clk,en_accum,clr_accum,sub,sel,IR_R0,IR_R1,IR_R2,IR_R3,
 	  error <= 16'h0000;
 	else if (en_accum)
 	  error <= next_error; 
+
+  /////////////////////////////////
+  // Pipeline logic				//
+  ///////////////////////////////
+	always @(posedge clk) begin
+		sub_ff <= sub;
+		intermediate_ff <= intermediate;
+		error_ff <= error;
+		next_IR_ff <= next_IR;
+	end
 
 endmodule

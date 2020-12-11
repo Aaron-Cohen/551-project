@@ -23,6 +23,7 @@ module MazePhysics(clk,RST_n,SS_n,SCLK,MISO,MOSI,PWMR,PWML,DIRR,DIRL,IR_EN,line_
   ////////////////////////////////////////////////////
   reg signed [12:0] alpha_lft,alpha_rght;			// angular acceleration of wheels
   reg signed [15:0] omega_lft,omega_rght;			// angular velocities of wheels
+  reg signed [15:0] omega_diff;						// used to cut angular velocity diff down on line_present
   reg signed [21:0] theta_lft,theta_rght;			// amount wheels have rotated since start
   reg signed [12:0] theta_robot;					// angular orientation of robot (starts at zero) should match line_theta
   reg signed [12:0] theta_err;
@@ -86,7 +87,7 @@ module MazePhysics(clk,RST_n,SS_n,SCLK,MISO,MOSI,PWMR,PWML,DIRR,DIRL,IR_EN,line_
     A2D_data = A2D_val(chnnl,theta_err,line_present);
 	
 
-  always @(negedge RST_n) begin
+  initial begin
 	omega_lft = 16'h0000;
 	omega_rght = 16'h0000;
 	theta_lft = 22'h000000;
