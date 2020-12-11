@@ -76,6 +76,18 @@ module MazeRunner_tb_4();
 		else
 			fails = fails + 1;
 	endtask
+	
+	
+	/**
+		Task to validate left veer
+	*/
+	task automatic validate_veer_left;
+		// When veering left, left wheel spinning much slower than right wheel
+		if (omega_rght - omega_lft > 100)
+			passes = passes + 1;
+		else
+			fails = fails + 1;
+	endtask
 
 	/**
 		Task to verify 100ms debounce does not react to bumper status changes
@@ -99,17 +111,6 @@ module MazeRunner_tb_4();
 		// Set bumpers back to whatever their original values were
 		BMPL_n = left_orig;
 		BMPR_n = right_orig;		
-	endtask
-
-	/**
-		Task to validate left veer
-	*/
-	task automatic validate_veer_left;
-		// When veering left, left wheel spinning much slower than right wheel
-		if (omega_rght - omega_lft > 100)
-			passes = passes + 1;
-		else
-			fails = fails + 1;
 	endtask
 
 	/**
