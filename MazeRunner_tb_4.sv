@@ -476,11 +476,7 @@ module MazeRunner_tb_4();
 		set_cmd(16'h0000); // Contents not important, just need cmd_rdy to go true in cmd_proc
 		wait_clks(100000);
 		
-		// Check in motion
-		//if(lft_spd == 0 || rght_spd == 0)
-		//	fails = fails + 1;
-	//	else 
-		//	passes = passes + 1;
+		valiate_move_state;
 		
 		// Remove line
 		line_present = 0;
